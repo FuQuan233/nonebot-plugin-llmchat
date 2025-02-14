@@ -1,5 +1,5 @@
 import aiofiles
-from nonebot import get_plugin_config, on_message, logger, on_command, get_driver
+from nonebot import get_plugin_config, on_message, logger, on_command, get_driver, require
 from nonebot.plugin import PluginMetadata
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message
 from nonebot.adapters.onebot.v11.permission import GROUP_ADMIN, GROUP_OWNER
@@ -18,6 +18,9 @@ import os
 import random
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import time
+
+require("nonebot_plugin_localstore")
+import nonebot_plugin_localstore as store
 
 __plugin_meta__ = PluginMetadata(
     name="llmchat",
@@ -283,9 +286,15 @@ async def handle_preset(event: GroupMessageEvent, args: Message = CommandArg()):
 
 
 # region 持久化与定时任务
+
+# 获取插件数据目录
+data_dir = store.get_plugin_data_dir()
+# 获取插件数据文件
+data_file = store.get_plugin_data_file("llmchat_state.json")
+
 async def save_state():
     """保存群组状态到文件"""
-    logger.info(f"开始保存群组状态到文件：{pluginConfig.storage_path}")
+    logger.info(f"开始保存群组状态到文件：{data_file}")
     data = {
         gid: {
             "preset": state.preset_name,
@@ -297,17 +306,17 @@ async def save_state():
         for gid, state in group_states.items()
     }
     
-    os.makedirs(os.path.dirname(pluginConfig.storage_path), exist_ok=True)
-    async with aiofiles.open(pluginConfig.storage_path, "w") as f:
+    os.makedirs(os.path.dirname(data_file), exist_ok=True)
+    async with aiofiles.open(data_file, "w") as f:
         await f.write(json.dumps(data, ensure_ascii=False))
 
 async def load_state():
     """从文件加载群组状态"""
-    logger.info(f"从文件加载群组状态：{pluginConfig.storage_path}")
-    if not os.path.exists(pluginConfig.storage_path):
+    logger.info(f"从文件加载群组状态：{data_file}")
+    if not os.path.exists(data_file):
         return
     
-    async with aiofiles.open(pluginConfig.storage_path, "r") as f:
+    async with aiofiles.open(data_file, "r") as f:
         data = json.loads(await f.read())
         for gid, state_data in data.items():
             state = GroupState()
