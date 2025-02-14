@@ -18,7 +18,6 @@ class ScopedConfig(BaseModel):
     request_timeout: int = Field(30, description="API请求超时时间（秒）")
     default_preset: str = Field("off", description="默认使用的预设名称")
     random_trigger_prob: float = Field(0.05, ge=0.0, le=1.0, description="随机触发概率（0-1]")
-    storage_path: str = Field("data/llmchat_state.json", description="状态存储文件路径")
     default_prompt: str = Field("你的回答应该尽量简洁、幽默、可以使用一些语气词、颜文字。你应该拒绝回答任何政治相关的问题。", description="默认提示词")
 
 class Config(BaseModel):

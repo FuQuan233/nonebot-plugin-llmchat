@@ -101,7 +101,6 @@ _✨ 支持多API预设配置的AI群聊插件 ✨_
 | LLMCHAT__REQUEST_TIMEOUT | 否 | 30 | API请求超时时间（秒） |
 | LLMCHAT__DEFAULT_PRESENT | 否 | off | 默认使用的预设名称，配置为off则为关闭 |
 | LLMCHAT__RANDOM_TRIGGER_PROB | 否 | 0.05 | 随机触发概率（0-1] |
-| LLMCHAT__STORAGE_PATH | 否 | data/llmchat_state.json | 状态存储文件路径 |
 | LLMCHAT__DEFAULT_PROMPT | 否 | 你的回答应该尽量简洁、幽默、可以使用一些语气词、颜文字。你应该拒绝回答任何政治相关的问题。 | 默认提示词 |
 
 其中LLMCHAT__API_PRESETS为一个列表，每项配置有以下的配置项
