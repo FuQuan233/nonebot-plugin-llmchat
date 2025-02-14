@@ -16,11 +16,13 @@ import time
 import json
 import os
 import random
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import time
 
 require("nonebot_plugin_localstore")
 import nonebot_plugin_localstore as store
+
+require("nonebot_plugin_apscheduler")
+from nonebot_plugin_apscheduler import scheduler
 
 __plugin_meta__ = PluginMetadata(
     name="llmchat",
@@ -332,10 +334,8 @@ async def load_state():
 async def init_plugin():
     logger.info("插件启动初始化")
     await load_state()
-    scheduler = AsyncIOScheduler()
     # 每5分钟保存状态
     scheduler.add_job(save_state, 'interval', minutes=5)
-    scheduler.start()
 
 @driver.on_shutdown
 async def cleanup_plugin():
