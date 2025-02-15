@@ -13,6 +13,7 @@ import asyncio
 from openai import AsyncOpenAI
 from .config import Config, PresetConfig
 import time
+import re
 import json
 import os
 import random
@@ -36,6 +37,10 @@ __plugin_meta__ = PluginMetadata(
 
 pluginConfig = get_plugin_config(Config).llmchat
 driver = get_driver()
+
+def filter_think(content:str) -> str:
+    filtered_content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
+    return filtered_content.strip()
 
 # 初始化群组状态
 class GroupState:
@@ -192,7 +197,10 @@ f'''
             )
             logger.debug(f"收到API响应 使用token数：{response.usage.total_tokens}")
 
-            reply = response.choices[0].message.content
+            if not state.output_reasoning_content:
+                reply = filter_think(response.choices[0].message.content)
+            else:
+                reply = response.choices[0].message.content
 
             # 请求成功后再保存历史记录，保证user和assistant穿插，防止R1模型报错
             state.history.append({"role": "user", "content": content})
