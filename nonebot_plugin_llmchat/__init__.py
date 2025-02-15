@@ -257,7 +257,7 @@ async def process_messages(group_id: int):
                 if reasoning_content or think_content:
                     await handler.send(Message(reasoning_content or think_content))
             else:
-                reply = response.choices[0].message.content
+                reply, _ = filter_think(response.choices[0].message.content)
 
             assert reply is not None
             logger.info(
