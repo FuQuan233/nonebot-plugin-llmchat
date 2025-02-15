@@ -252,6 +252,9 @@ async def process_messages(group_id: int):
                 f"准备发送回复消息 群号：{group_id} 消息分段数：{len(reply.split('<botbr>'))}"
             )
             for r in reply.split("<botbr>"):
+                # 似乎会有空消息的情况导致string index out of range异常
+                if r.__len__() < 1:
+                    continue
                 # 删除前后多余的换行和空格
                 while r[0] == "\n" or r[0] == " ":
                     r = r[1:]
