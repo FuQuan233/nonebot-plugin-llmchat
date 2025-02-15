@@ -1,5 +1,6 @@
+
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional
+
 
 class PresetConfig(BaseModel):
     """API预设配置"""
@@ -12,7 +13,7 @@ class PresetConfig(BaseModel):
 
 class ScopedConfig(BaseModel):
     """LLM Chat Plugin配置"""
-    api_presets: List[PresetConfig] = Field(...,description="API预设列表（至少配置1个预设）")
+    api_presets: list[PresetConfig] = Field(...,description="API预设列表（至少配置1个预设）")
     history_size: int = Field(20, description="LLM上下文消息保留数量")
     past_events_size : int = Field(10, description="触发回复时发送的群消息数量")
     request_timeout: int = Field(30, description="API请求超时时间（秒）")
