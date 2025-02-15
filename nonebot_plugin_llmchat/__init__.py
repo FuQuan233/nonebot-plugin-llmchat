@@ -256,10 +256,7 @@ async def process_messages(group_id: int):
                 if r.__len__() < 1:
                     continue
                 # 删除前后多余的换行和空格
-                while r[0] == "\n" or r[0] == " ":
-                    r = r[1:]
-                while r[-1] == "\n" or r[0] == " ":
-                    r = r[:-1]
+                r = r.strip()
                 await asyncio.sleep(2)
                 logger.debug(
                     f"发送消息分段 内容：{r[:50]}..."
