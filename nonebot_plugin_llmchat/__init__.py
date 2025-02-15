@@ -53,12 +53,23 @@ driver = get_driver()
 tasks: set["asyncio.Task"] = set()
 
 
-def filter_think(content: Optional[str]) -> Optional[str]:
+def filter_think(content: Optional[str]) -> tuple[str, Optional[str]]:
     if content is None:
         return None
 
-    filtered_content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
-    return filtered_content.strip()
+    # 匹配 <think> 标签和其中的内容
+    think_content = re.findall(r"<think>(.*?)</think>", content, flags=re.DOTALL)
+
+    # 去除 <think> 标签及其内容
+    filtered_content = re.sub(
+        r"<think>.*?</think>", "", content, flags=re.DOTALL
+    ).strip()
+
+    # 如果找到了 <think> 标签内容，返回过滤后的文本和标签内的内容，否则只返回过滤后的文本和None
+    if think_content:
+        return filtered_content, think_content[0].strip()
+    else:
+        return filtered_content, None
 
 
 # 初始化群组状态
@@ -232,20 +243,20 @@ async def process_messages(group_id: int):
             if response.usage is not None:
                 logger.debug(f"收到API响应 使用token数：{response.usage.total_tokens}")
 
-            if not state.output_reasoning_content:
-                reply = filter_think(response.choices[0].message.content)
-            else:
-                reply = response.choices[0].message.content
-
             # 请求成功后再保存历史记录，保证user和assistant穿插，防止R1模型报错
             state.history.append({"role": "user", "content": content})
             state.past_events.clear()
 
-            reasoning_content = getattr(
-                response.choices[0].message, "reasoning_content", None
-            )
-            if state.output_reasoning_content and reasoning_content:
-                await handler.send(Message(reasoning_content))
+            if not state.output_reasoning_content:
+                reasoning_content = getattr(
+                    response.choices[0].message, "reasoning_content", None
+                )
+                reply, think_content = filter_think(response.choices[0].message.content)
+
+                if reasoning_content or think_content:
+                    await handler.send(Message(reasoning_content or think_content))
+            else:
+                reply = response.choices[0].message.content
 
             assert reply is not None
             logger.info(
