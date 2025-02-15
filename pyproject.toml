@@ -46,6 +46,7 @@ select = [
     "PT",    # flake8-pytest-style
     "Q",     # flake8-quotes
     "TID",   # flake8-tidy-imports
+    "TC",    # flake8-type-checking
     "RUF",   # Ruff-specific rules
 ]
 ignore = [

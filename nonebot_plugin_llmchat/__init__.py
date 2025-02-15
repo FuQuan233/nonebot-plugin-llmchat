@@ -1,13 +1,12 @@
 import asyncio
 from collections import deque
-from collections.abc import Iterable
 from datetime import datetime
 import json
 import os
 import random
 import re
 import time
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import aiofiles
 from nonebot import (
@@ -25,7 +24,6 @@ from nonebot.permission import SUPERUSER
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
 from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletionMessageParam
 
 from .config import Config, PresetConfig
 
@@ -34,6 +32,11 @@ import nonebot_plugin_localstore as store
 
 require("nonebot_plugin_apscheduler")
 from nonebot_plugin_apscheduler import scheduler
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from openai.types.chat import ChatCompletionMessageParam
 
 __plugin_meta__ = PluginMetadata(
     name="llmchat",
