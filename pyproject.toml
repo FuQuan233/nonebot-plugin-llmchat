@@ -19,6 +19,60 @@ nonebot-plugin-apscheduler = "^0.5.0"
 nonebot-adapter-onebot = "^2.0.0"
 nonebot-plugin-localstore = "^0.7.3"
 
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.8.0"
+nonemoji = "^0.1.2"
+pre-commit = "^4.0.0"
+
+[tool.ruff]
+line-length = 130
+target-version = "py39"
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = [
+    "F",     # Pyflakes
+    "W",     # pycodestyle warnings
+    "E",     # pycodestyle errors
+    "I",     # isort
+    "UP",    # pyupgrade
+    "ASYNC", # flake8-async
+    "C4",    # flake8-comprehensions
+    "T10",   # flake8-debugger
+    "T20",   # flake8-print
+    "PYI",   # flake8-pyi
+    "PT",    # flake8-pytest-style
+    "Q",     # flake8-quotes
+    "TID",   # flake8-tidy-imports
+    "TC",    # flake8-type-checking
+    "RUF",   # Ruff-specific rules
+]
+ignore = [
+    "E402",   # module-import-not-at-top-of-file
+    "UP037",  # quoted-annotation
+    "RUF001", # ambiguous-unicode-character-string
+    "RUF002", # ambiguous-unicode-character-docstring
+    "RUF003", # ambiguous-unicode-character-comment
+]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
+
+[tool.pyright]
+pythonVersion = "3.9"
+pythonPlatform = "All"
+defineConstant = { PYDANTIC_V2 = true }
+executionEnvironments = [{ root = "./" }]
+
+typeCheckingMode = "standard"
+reportShadowedImports = false
+disableBytesTypePromotions = true
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
