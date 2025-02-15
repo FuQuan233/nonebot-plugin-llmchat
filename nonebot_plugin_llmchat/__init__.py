@@ -53,23 +53,23 @@ driver = get_driver()
 tasks: set["asyncio.Task"] = set()
 
 
-def filter_think(content: Optional[str]) -> tuple[str, Optional[str]]:
+def pop_reasoning_content(
+    content: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
     if content is None:
-        return None
+        return None, None
 
+    think_content: Optional[str] = None
     # 匹配 <think> 标签和其中的内容
-    think_content = re.findall(r"<think>(.*?)</think>", content, flags=re.DOTALL)
-
-    # 去除 <think> 标签及其内容
-    filtered_content = re.sub(
-        r"<think>.*?</think>", "", content, flags=re.DOTALL
-    ).strip()
+    if matched := re.match(r"<think>(.*?)</think>", content, flags=re.DOTALL):
+        think_content = matched.group(0)
 
     # 如果找到了 <think> 标签内容，返回过滤后的文本和标签内的内容，否则只返回过滤后的文本和None
     if think_content:
-        return filtered_content, think_content[0].strip()
+        filtered_content = content.replace(think_content, "").strip()
+        return filtered_content, think_content.strip()
     else:
-        return filtered_content, None
+        return content, None
 
 
 # 初始化群组状态
@@ -247,17 +247,16 @@ async def process_messages(group_id: int):
             state.history.append({"role": "user", "content": content})
             state.past_events.clear()
 
-            reply = ""
-            if state.output_reasoning_content:
-                reasoning_content = getattr(
-                    response.choices[0].message, "reasoning_content", None
-                )
-                reply, think_content = filter_think(response.choices[0].message.content)
+            reply, matched_reasoning_content = pop_reasoning_content(
+                response.choices[0].message.content
+            )
+            reasoning_content: Optional[str] = (
+                getattr(response.choices[0].message, "reasoning_content", None)
+                or matched_reasoning_content
+            )
 
-                if reasoning_content or think_content:
-                    await handler.send(Message(reasoning_content or think_content))
-            else:
-                reply, _ = filter_think(response.choices[0].message.content)
+            if state.output_reasoning_content and reasoning_content:
+                await handler.send(Message(reasoning_content))
 
             assert reply is not None
             logger.info(
@@ -265,7 +264,7 @@ async def process_messages(group_id: int):
             )
             for r in reply.split("<botbr>"):
                 # 似乎会有空消息的情况导致string index out of range异常
-                if r.__len__() < 1:
+                if len(r) == 0 or r.isspace():
                     continue
                 # 删除前后多余的换行和空格
                 r = r.strip()
@@ -336,7 +335,7 @@ async def handle_edit_preset(event: GroupMessageEvent, args: Message = CommandAr
         group_states[group_id] = GroupState()
 
     group_states[group_id].group_prompt = group_prompt
-    await preset_handler.finish("修改成功")
+    await edit_preset_handler.finish("修改成功")
 
 
 reset_handler = on_command(
@@ -356,7 +355,7 @@ async def handle_reset(event: GroupMessageEvent, args: Message = CommandArg()):
 
     group_states[group_id].past_events.clear()
     group_states[group_id].history.clear()
-    await preset_handler.finish("记忆已清空")
+    await reset_handler.finish("记忆已清空")
 
 
 # 预设切换命令
@@ -377,10 +376,10 @@ async def handle_think(event: GroupMessageEvent, args: Message = CommandArg()):
 
     if group_states[group_id].output_reasoning_content:
         group_states[group_id].output_reasoning_content = False
-        await preset_handler.finish("已关闭思维输出")
+        await think_handler.finish("已关闭思维输出")
     else:
         group_states[group_id].output_reasoning_content = True
-        await preset_handler.finish("已开启思维输出")
+        await think_handler.finish("已开启思维输出")
 
 
 # region 持久化与定时任务
