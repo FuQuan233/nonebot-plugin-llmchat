@@ -247,7 +247,8 @@ async def process_messages(group_id: int):
             state.history.append({"role": "user", "content": content})
             state.past_events.clear()
 
-            if not state.output_reasoning_content:
+            reply = ""
+            if state.output_reasoning_content:
                 reasoning_content = getattr(
                     response.choices[0].message, "reasoning_content", None
                 )
