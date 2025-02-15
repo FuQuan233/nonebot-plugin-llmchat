@@ -53,23 +53,23 @@ driver = get_driver()
 tasks: set["asyncio.Task"] = set()
 
 
-def filter_think(content: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+def pop_reasoning_content(
+    content: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
     if content is None:
         return None, None
 
+    think_content: Optional[str] = None
     # 匹配 <think> 标签和其中的内容
-    think_content = re.findall(r"<think>(.*?)</think>", content, flags=re.DOTALL)
-
-    # 去除 <think> 标签及其内容
-    filtered_content = re.sub(
-        r"<think>.*?</think>", "", content, flags=re.DOTALL
-    ).strip()
+    if matched := re.match(r"<think>(.*?)</think>", content, flags=re.DOTALL):
+        think_content = matched.group(0)
 
     # 如果找到了 <think> 标签内容，返回过滤后的文本和标签内的内容，否则只返回过滤后的文本和None
     if think_content:
-        return filtered_content, think_content[0].strip()
+        filtered_content = content.replace(think_content, "").strip()
+        return filtered_content, think_content.strip()
     else:
-        return filtered_content, None
+        return content, None
 
 
 # 初始化群组状态
@@ -247,7 +247,7 @@ async def process_messages(group_id: int):
             state.history.append({"role": "user", "content": content})
             state.past_events.clear()
 
-            reply, matched_reasoning_content = filter_think(
+            reply, matched_reasoning_content = pop_reasoning_content(
                 response.choices[0].message.content
             )
             reasoning_content: Optional[str] = (
