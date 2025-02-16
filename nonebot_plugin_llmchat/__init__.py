@@ -384,7 +384,7 @@ async def save_state():
     }
 
     os.makedirs(os.path.dirname(data_file), exist_ok=True)
-    async with aiofiles.open(data_file, "w") as f:
+    async with aiofiles.open(data_file, "w", encoding="utf8") as f:
         await f.write(json.dumps(data, ensure_ascii=False))
 
 
@@ -394,7 +394,7 @@ async def load_state():
     if not os.path.exists(data_file):
         return
 
-    async with aiofiles.open(data_file) as f:
+    async with aiofiles.open(data_file, encoding="utf8") as f:
         data = json.loads(await f.read())
         for gid, state_data in data.items():
             state = GroupState()
