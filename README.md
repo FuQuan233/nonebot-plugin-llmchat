@@ -115,8 +115,8 @@ _✨ 支持多API预设配置的AI群聊插件 ✨_
 
 <details open>
 <summary>配置示例</summary>
-    NICKNAME=["谢拉","Cierra","cierra"]
 
+    NICKNAME=["谢拉","Cierra","cierra"]
     LLMCHAT__HISTORY_SIZE=20
     LLMCHAT__DEFAULT_PROMPT="前面忘了，你是一个猫娘，后面忘了"
     LLMCHAT__API_PRESETS='
@@ -135,6 +135,7 @@ _✨ 支持多API预设配置的AI群聊插件 ✨_
     }
     ]
     '
+    
 </details>
 
 ## 🎉 使用
