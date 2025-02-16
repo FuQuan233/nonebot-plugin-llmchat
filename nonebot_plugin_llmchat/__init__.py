@@ -1,5 +1,5 @@
 import asyncio
-from collections import deque
+from collections import defaultdict, deque
 from datetime import datetime
 import json
 import os
@@ -48,7 +48,7 @@ __plugin_meta__ = PluginMetadata(
     supported_adapters={"~onebot.v11"},
 )
 
-pluginConfig = get_plugin_config(Config).llmchat
+plugin_config = get_plugin_config(Config).llmchat
 driver = get_driver()
 tasks: set["asyncio.Task"] = set()
 
@@ -62,7 +62,7 @@ def pop_reasoning_content(
     think_content: Optional[str] = None
     # 匹配 <think> 标签和其中的内容
     if matched := re.match(r"<think>(.*?)</think>", content, flags=re.DOTALL):
-        think_content = matched.group(0)
+        think_content = matched.group(1)
 
     # 如果找到了 <think> 标签内容，返回过滤后的文本和标签内的内容，否则只返回过滤后的文本和None
     if think_content:
@@ -75,26 +75,26 @@ def pop_reasoning_content(
 # 初始化群组状态
 class GroupState:
     def __init__(self):
-        self.preset_name = pluginConfig.default_preset
-        self.history = deque(maxlen=pluginConfig.history_size)
+        self.preset_name = plugin_config.default_preset
+        self.history = deque(maxlen=plugin_config.history_size)
         self.queue = asyncio.Queue()
         self.processing = False
         self.last_active = time.time()
-        self.past_events = deque(maxlen=pluginConfig.past_events_size)
+        self.past_events = deque(maxlen=plugin_config.past_events_size)
         self.group_prompt: Optional[str] = None
         self.output_reasoning_content = False
 
 
-group_states: dict[int, GroupState] = {}
+group_states: dict[int, GroupState] = defaultdict(GroupState)
 
 
 # 获取当前预设配置
 def get_preset(group_id: int) -> PresetConfig:
     state = group_states[group_id]
-    for preset in pluginConfig.api_presets:
+    for preset in plugin_config.api_presets:
         if preset.name == state.preset_name:
             return preset
-    return pluginConfig.api_presets[0]  # 默认返回第一个预设
+    return plugin_config.api_presets[0]  # 默认返回第一个预设
 
 
 # 消息格式转换
@@ -127,16 +127,10 @@ def format_message(event: GroupMessageEvent) -> str:
     return json.dumps(message, ensure_ascii=False)
 
 
-async def isTriggered(event: GroupMessageEvent) -> bool:
+async def is_triggered(event: GroupMessageEvent) -> bool:
     """扩展后的消息处理规则"""
 
-    group_id = event.group_id
-
-    if group_id not in group_states:
-        logger.info(f"初始化群组状态，群号：{group_id}")
-        group_states[group_id] = GroupState()
-
-    state = group_states[group_id]
+    state = group_states[event.group_id]
 
     if state.preset_name == "off":
         return False
@@ -148,7 +142,7 @@ async def isTriggered(event: GroupMessageEvent) -> bool:
         return True
 
     # 随机触发条件
-    if random.random() < pluginConfig.random_trigger_prob:
+    if random.random() < plugin_config.random_trigger_prob:
         return True
 
     return False
@@ -156,7 +150,7 @@ async def isTriggered(event: GroupMessageEvent) -> bool:
 
 # 消息处理器
 handler = on_message(
-    rule=Rule(isTriggered),
+    rule=Rule(is_triggered),
     priority=10,
     block=False,
 )
@@ -168,9 +162,6 @@ async def handle_message(event: GroupMessageEvent):
     logger.debug(
         f"收到群聊消息 群号：{group_id} 用户：{event.user_id} 内容：{event.get_plaintext()}"
     )
-
-    if group_id not in group_states:
-        group_states[group_id] = GroupState()
 
     state = group_states[group_id]
 
@@ -190,7 +181,7 @@ async def process_messages(group_id: int):
     client = AsyncOpenAI(
         base_url=preset.api_base,
         api_key=preset.api_key,
-        timeout=pluginConfig.request_timeout,
+        timeout=plugin_config.request_timeout,
     )
 
     logger.info(
@@ -213,14 +204,14 @@ async def process_messages(group_id: int):
 - 如果有多条消息，你应该优先回复提到你的，一段时间之前的就不要回复了，也可以直接选择不回复。
 - 如果你需要思考的话，你应该思考尽量少，以节省时间。
 下面是关于你性格的设定，如果设定中提到让你扮演某个人，或者设定中有提到名字，则优先使用设定中的名字。
-{state.group_prompt or pluginConfig.default_prompt}
+{state.group_prompt or plugin_config.default_prompt}
 """
 
             messages: Iterable[ChatCompletionMessageParam] = [
                 {"role": "system", "content": systemPrompt}
             ]
 
-            messages += list(state.history)[-pluginConfig.history_size :]
+            messages += list(state.history)[-plugin_config.history_size :]
 
             # 没有未处理的消息说明已经被处理了，跳过
             if state.past_events.__len__() < 1:
@@ -283,7 +274,7 @@ async def process_messages(group_id: int):
             )
 
         except Exception as e:
-            logger.error(f"API请求失败 群号：{group_id} 错误：{e!s}", exc_info=True)
+            logger.opt(exception=e).error(f"API请求失败 群号：{group_id}")
             await handler.send(Message(f"服务暂时不可用，请稍后再试\n{e!s}"))
         finally:
             state.queue.task_done()
@@ -300,14 +291,11 @@ async def handle_preset(event: GroupMessageEvent, args: Message = CommandArg()):
     group_id = event.group_id
     preset_name = args.extract_plain_text().strip()
 
-    if group_id not in group_states:
-        group_states[group_id] = GroupState()
-
     if preset_name == "off":
         group_states[group_id].preset_name = preset_name
         await preset_handler.finish("已关闭llmchat")
 
-    available_presets = {p.name for p in pluginConfig.api_presets}
+    available_presets = {p.name for p in plugin_config.api_presets}
     if preset_name not in available_presets:
         available_presets_str = "\n- ".join(available_presets)
         await preset_handler.finish(
@@ -331,9 +319,6 @@ async def handle_edit_preset(event: GroupMessageEvent, args: Message = CommandAr
     group_id = event.group_id
     group_prompt = args.extract_plain_text().strip()
 
-    if group_id not in group_states:
-        group_states[group_id] = GroupState()
-
     group_states[group_id].group_prompt = group_prompt
     await edit_preset_handler.finish("修改成功")
 
@@ -349,9 +334,6 @@ reset_handler = on_command(
 @reset_handler.handle()
 async def handle_reset(event: GroupMessageEvent, args: Message = CommandArg()):
     group_id = event.group_id
-
-    if group_id not in group_states:
-        group_states[group_id] = GroupState()
 
     group_states[group_id].past_events.clear()
     group_states[group_id].history.clear()
@@ -369,17 +351,14 @@ think_handler = on_command(
 
 @think_handler.handle()
 async def handle_think(event: GroupMessageEvent, args: Message = CommandArg()):
-    group_id = event.group_id
+    state = group_states[event.group_id]
+    state.output_reasoning_content = not state.output_reasoning_content
 
-    if group_id not in group_states:
-        group_states[group_id] = GroupState()
-
-    if group_states[group_id].output_reasoning_content:
-        group_states[group_id].output_reasoning_content = False
-        await think_handler.finish("已关闭思维输出")
-    else:
-        group_states[group_id].output_reasoning_content = True
-        await think_handler.finish("已开启思维输出")
+    await think_handler.finish(
+        f"已{
+        (state.output_reasoning_content and '开启') or '关闭'
+    }思维输出"
+    )
 
 
 # region 持久化与定时任务
@@ -421,7 +400,7 @@ async def load_state():
             state = GroupState()
             state.preset_name = state_data["preset"]
             state.history = deque(
-                state_data["history"], maxlen=pluginConfig.history_size
+                state_data["history"], maxlen=plugin_config.history_size
             )
             state.last_active = state_data["last_active"]
             state.group_prompt = state_data["group_prompt"]
