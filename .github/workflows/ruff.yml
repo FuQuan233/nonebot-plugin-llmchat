@@ -1,0 +1,26 @@
+name: Ruff Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - "nonebot_plugin_llmchat/**"
+      - ".github/workflows/ruff.yml"
+      - "pyproject.toml"
+      - "poetry.lock"
+
+jobs:
+  ruff:
+    name: Ruff Lint
+    runs-on: ubuntu-latest
+    concurrency:
+      group: lint-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Ruff Lint
+        uses: astral-sh/ruff-action@v3
