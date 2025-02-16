@@ -18,3 +18,6 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
         cache: "poetry"
+
+    - run: poetry install --all-extras
+      shell: bash
