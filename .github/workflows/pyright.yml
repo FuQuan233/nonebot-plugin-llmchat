@@ -1,0 +1,31 @@
+name: Pyright Lint
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - "nonebot_plugin_llmchat/**"
+      - ".github/workflows/pyright.yml"
+      - "pyproject.toml"
+      - "poetry.lock"
+
+jobs:
+  pyright:
+    name: Pyright Lint
+    runs-on: ubuntu-latest
+    concurrency:
+      group: lint-${{ github.ref }}-${{ matrix.env }}
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
+
+      - name: Run Pyright
+        uses: jakebailey/pyright-action@v2
+        with:
+          pylance-version: latest-release
