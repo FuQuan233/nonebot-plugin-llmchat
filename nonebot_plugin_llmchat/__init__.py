@@ -353,9 +353,7 @@ async def handle_think(event: GroupMessageEvent, args: Message = CommandArg()):
     state.output_reasoning_content = not state.output_reasoning_content
 
     await think_handler.finish(
-        f"已{
-        (state.output_reasoning_content and '开启') or '关闭'
-    }思维输出"
+        f"已{(state.output_reasoning_content and '开启') or '关闭'}思维输出"
     )
 
 
