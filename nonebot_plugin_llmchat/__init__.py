@@ -59,15 +59,13 @@ def pop_reasoning_content(
     if content is None:
         return None, None
 
-    think_content: Optional[str] = None
-    # 匹配 <think> 标签和其中的内容
-    if matched := re.match(r"<think>(.*?)</think>", content, flags=re.DOTALL):
-        think_content = matched.group(1)
-
     # 如果找到了 <think> 标签内容，返回过滤后的文本和标签内的内容，否则只返回过滤后的文本和None
-    if think_content:
-        filtered_content = content.replace(think_content, "").strip()
-        return filtered_content, think_content.strip()
+    if matched := re.match(r"<think>(.*?)</think>", content, flags=re.DOTALL):
+        reasoning_element = matched.group(0)
+        reasoning_content = matched.group(1).strip()
+        filtered_content = content.replace(reasoning_element, "").strip()
+
+        return filtered_content, reasoning_content
     else:
         return content, None
 
