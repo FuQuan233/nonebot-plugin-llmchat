@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING, Optional
 
 import aiofiles
 from nonebot import (
+    get_bot,
     get_driver,
     get_plugin_config,
     logger,
     on_command,
     on_message,
     require,
-    get_bot,
 )
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message
 from nonebot.adapters.onebot.v11.permission import GROUP_ADMIN, GROUP_OWNER
@@ -149,6 +149,7 @@ def build_reasoning_forward_nodes(self_id: str, reasoning_content: str):
 
     return nodes
 
+
 async def is_triggered(event: GroupMessageEvent) -> bool:
     """扩展后的消息处理规则"""
 
@@ -271,7 +272,10 @@ async def process_messages(group_id: int):
             if state.output_reasoning_content and reasoning_content:
                 bot = get_bot(str(event.self_id))
                 await bot.send_group_forward_msg(
-                    group_id=group_id, messages=build_reasoning_forward_nodes(bot.self_id,reasoning_content)
+                    group_id=group_id,
+                    messages=build_reasoning_forward_nodes(
+                        bot.self_id, reasoning_content
+                    ),
                 )
 
             assert reply is not None
