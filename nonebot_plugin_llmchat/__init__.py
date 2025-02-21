@@ -121,6 +121,7 @@ def format_message(event: GroupMessageEvent) -> str:
         "SenderNickname": str(event.sender.card or event.sender.nickname),
         "SenderUserId": str(event.user_id),
         "Message": text_message,
+        "MessageID": event.message_id,
         "SendTime": datetime.fromtimestamp(event.time).isoformat(),
     }
     return json.dumps(message, ensure_ascii=False)
@@ -219,12 +220,14 @@ async def process_messages(group_id: int):
 你的回复需要遵守以下几点规则：
 - 你可以使用多条消息回复，每两条消息之间使用<botbr>分隔，<botbr>前后不需要包含额外的换行和空格。
 - 除<botbr>外，消息中不应该包含其他类似的标记。
-- 不要使用markdown格式，聊天软件不支持markdown解析。
+- 不要使用markdown或者html，聊天软件不支持解析，换行请用换行符。
 - 你应该以普通人的方式发送消息，每条消息字数要尽量少一些，应该倾向于使用更多条的消息回复。
 - 代码则不需要分段，用单独的一条消息发送。
 - 请使用发送者的昵称称呼发送者，你可以礼貌地问候发送者，但只需要在第一次回答这位发送者的问题时问候他。
 - 你有at群成员的能力，只需要在某条消息中插入[CQ:at,qq=（QQ号）]，也就是CQ码。at发送者是非必要的，你可以根据你自己的想法at某个人。
+- 你有引用某条消息的能力，使用[CQ:reply,id=（消息id）]来引用。
 - 如果有多条消息，你应该优先回复提到你的，一段时间之前的就不要回复了，也可以直接选择不回复。
+- 如果你选择完全不回复，你只需要直接输出一个<botbr>。
 - 如果你需要思考的话，你应该思考尽量少，以节省时间。
 下面是关于你性格的设定，如果设定中提到让你扮演某个人，或者设定中有提到名字，则优先使用设定中的名字。
 {state.group_prompt or plugin_config.default_prompt}
