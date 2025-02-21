@@ -133,16 +133,16 @@ def build_reasoning_forward_nodes(self_id: str, reasoning_content: str):
         {
             "type": "node",
             "data": {
-                "name": self_nickname,
-                "uin": self_id,
+                "nickname": self_nickname,
+                "user_id": self_id,
                 "content": f"{self_nickname}的内心OS:",
             },
         },
         {
             "type": "node",
             "data": {
-                "name": self_nickname,
-                "uin": self_id,
+                "nickname": self_nickname,
+                "user_id": self_id,
                 "content": reasoning_content,
             },
         },
