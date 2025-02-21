@@ -260,10 +260,6 @@ async def process_messages(group_id: int):
             if response.usage is not None:
                 logger.debug(f"收到API响应 使用token数：{response.usage.total_tokens}")
 
-            # 请求成功后再保存历史记录，保证user和assistant穿插，防止R1模型报错
-            state.history.append({"role": "user", "content": content})
-            state.past_events.clear()
-
             reply, matched_reasoning_content = pop_reasoning_content(
                 response.choices[0].message.content
             )
@@ -272,14 +268,23 @@ async def process_messages(group_id: int):
                 or matched_reasoning_content
             )
 
+            # 请求成功后再保存历史记录，保证user和assistant穿插，防止R1模型报错
+            state.history.append({"role": "user", "content": content})
+            # 添加助手回复到历史
+            state.history.append({"role": "assistant","content": reply})
+            state.past_events.clear()
+
             if state.output_reasoning_content and reasoning_content:
-                bot = get_bot(str(event.self_id))
-                await bot.send_group_forward_msg(
-                    group_id=group_id,
-                    messages=build_reasoning_forward_nodes(
-                        bot.self_id, reasoning_content
-                    ),
-                )
+                try:
+                    bot = get_bot(str(event.self_id))
+                    await bot.send_group_forward_msg(
+                        group_id=group_id,
+                        messages=build_reasoning_forward_nodes(
+                            bot.self_id, reasoning_content
+                        ),
+                    )
+                except Exception as e:
+                    await handler.send(f"合并转发消息发送失败：\n{e!s}\n"+reasoning_content)
 
             assert reply is not None
             logger.info(
@@ -296,14 +301,6 @@ async def process_messages(group_id: int):
                     f"发送消息分段 内容：{r[:50]}..."
                 )  # 只记录前50个字符避免日志过大
                 await handler.send(Message(r))
-
-            # 添加助手回复到历史
-            state.history.append(
-                {
-                    "role": "assistant",
-                    "content": reply,
-                }
-            )
 
         except Exception as e:
             logger.opt(exception=e).error(f"API请求失败 群号：{group_id}")
