@@ -204,7 +204,7 @@ async def process_messages(group_id: int):
     preset = get_preset(group_id)
 
     # 初始化OpenAI客户端
-    if preset.proxy:
+    if preset.proxy != "":
         client = AsyncOpenAI(
             base_url=preset.api_base,
             api_key=preset.api_key,
