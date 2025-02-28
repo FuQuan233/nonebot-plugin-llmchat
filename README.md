@@ -112,6 +112,7 @@ _✨ 支持多API预设配置的AI群聊插件 ✨_
 | model_name | 是 | 无 | 模型名称 |
 | max_tokens | 否 | 2048 | 最大响应token数 |
 | temperature | 否 | 0.7 | 生成温度 |
+| proxy | 否 | 无 | 请求API时使用的HTTP代理 |
 
 <details open>
 <summary>配置示例</summary>
@@ -125,7 +126,8 @@ _✨ 支持多API预设配置的AI群聊插件 ✨_
         "name": "aliyun-deepseek-v3",
         "api_key": "sk-your-api-key",
         "model_name": "deepseek-v3",
-        "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "proxy": "http://10.0.0.183:7890"
     },
     {
         "name": "deepseek-r1",
