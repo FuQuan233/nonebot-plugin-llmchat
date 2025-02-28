@@ -10,6 +10,7 @@ class PresetConfig(BaseModel):
     model_name: str = Field(..., description="模型名称")
     max_tokens: int = Field(2048, description="最大响应token数")
     temperature: float = Field(0.7, description="生成温度（0-2]")
+    proxy: str = Field(None, description="HTTP代理服务器")
 
 
 class ScopedConfig(BaseModel):
