@@ -82,6 +82,7 @@ class GroupState:
         self.past_events = deque(maxlen=plugin_config.past_events_size)
         self.group_prompt: Optional[str] = None
         self.output_reasoning_content = False
+        self.random_trigger_prob = plugin_config.random_trigger_prob
 
 
 group_states: dict[int, GroupState] = defaultdict(GroupState)
@@ -337,7 +338,7 @@ async def handle_preset(event: GroupMessageEvent, args: Message = CommandArg()):
 
 edit_preset_handler = on_command(
     "修改设定",
-    priority=1,
+    priority=99,
     block=True,
     permission=(SUPERUSER | GROUP_ADMIN | GROUP_OWNER),
 )
@@ -367,6 +368,29 @@ async def handle_reset(event: GroupMessageEvent, args: Message = CommandArg()):
     group_states[group_id].past_events.clear()
     group_states[group_id].history.clear()
     await reset_handler.finish("记忆已清空")
+
+set_prob_handler = on_command(
+    "设置主动回复概率",
+    priority=99,
+    block=True,
+    permission=(SUPERUSER | GROUP_ADMIN | GROUP_OWNER),
+)
+
+
+@set_prob_handler.handle()
+async def handle_set_prob(event: GroupMessageEvent, args: Message = CommandArg()):
+    group_id = event.group_id
+    prob = 0
+
+    try:
+        prob=float(args.extract_plain_text().strip())
+        if prob<0 or prob>1:
+            raise ValueError
+    except Exception as e:
+        await reset_handler.finish(f"输入有误，请使用 [0,1] 的浮点数\n{e!s}")
+
+    group_states[group_id].random_trigger_prob = prob
+    await reset_handler.finish(f"主动回复概率已设为 {prob}")
 
 
 # 预设切换命令
@@ -406,6 +430,7 @@ async def save_state():
             "last_active": state.last_active,
             "group_prompt": state.group_prompt,
             "output_reasoning_content": state.output_reasoning_content,
+            "random_trigger_prob": state.random_trigger_prob,
         }
         for gid, state in group_states.items()
     }
@@ -432,6 +457,7 @@ async def load_state():
             state.last_active = state_data["last_active"]
             state.group_prompt = state_data["group_prompt"]
             state.output_reasoning_content = state_data["output_reasoning_content"]
+            state.random_trigger_prob = (state_data.get("random_trigger_prob") or plugin_config.random_trigger_prob)
             group_states[int(gid)] = state
 
 
