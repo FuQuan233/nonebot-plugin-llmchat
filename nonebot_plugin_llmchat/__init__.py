@@ -9,6 +9,7 @@ import time
 from typing import TYPE_CHECKING, Optional
 
 import aiofiles
+import httpx
 from nonebot import (
     get_bot,
     get_driver,
@@ -203,11 +204,19 @@ async def process_messages(group_id: int):
     preset = get_preset(group_id)
 
     # 初始化OpenAI客户端
-    client = AsyncOpenAI(
-        base_url=preset.api_base,
-        api_key=preset.api_key,
-        timeout=plugin_config.request_timeout,
-    )
+    if preset.proxy:
+        client = AsyncOpenAI(
+            base_url=preset.api_base,
+            api_key=preset.api_key,
+            timeout=plugin_config.request_timeout,
+            http_client=httpx.AsyncClient(proxy=preset.proxy),
+        )
+    else:
+        client = AsyncOpenAI(
+            base_url=preset.api_base,
+            api_key=preset.api_key,
+            timeout=plugin_config.request_timeout,
+        )
 
     logger.info(
         f"开始处理群聊消息 群号：{group_id} 当前队列长度：{state.queue.qsize()}"
