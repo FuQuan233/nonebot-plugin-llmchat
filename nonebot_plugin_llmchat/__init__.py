@@ -167,7 +167,7 @@ async def is_triggered(event: GroupMessageEvent) -> bool:
         return True
 
     # 随机触发条件
-    if random.random() < plugin_config.random_trigger_prob:
+    if random.random() < state.random_trigger_prob:
         return True
 
     return False
