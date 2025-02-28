@@ -285,9 +285,7 @@ async def process_messages(group_id: int):
                         ),
                     )
                 except Exception as e:
-                    await handler.send(
-                        f"合并转发消息发送失败：\n{e!s}\n" + reasoning_content
-                    )
+                    logger.error(f"合并转发消息发送失败：\n{e!s}\n")
 
             assert reply is not None
             logger.info(
