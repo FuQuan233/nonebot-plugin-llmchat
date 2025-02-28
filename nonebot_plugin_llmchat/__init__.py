@@ -272,7 +272,7 @@ async def process_messages(group_id: int):
             # 请求成功后再保存历史记录，保证user和assistant穿插，防止R1模型报错
             state.history.append({"role": "user", "content": content})
             # 添加助手回复到历史
-            state.history.append({"role": "assistant","content": reply})
+            state.history.append({"role": "assistant", "content": reply})
             state.past_events.clear()
 
             if state.output_reasoning_content and reasoning_content:
@@ -285,7 +285,9 @@ async def process_messages(group_id: int):
                         ),
                     )
                 except Exception as e:
-                    await handler.send(f"合并转发消息发送失败：\n{e!s}\n"+reasoning_content)
+                    await handler.send(
+                        f"合并转发消息发送失败：\n{e!s}\n" + reasoning_content
+                    )
 
             assert reply is not None
             logger.info(
@@ -369,6 +371,7 @@ async def handle_reset(event: GroupMessageEvent, args: Message = CommandArg()):
     group_states[group_id].history.clear()
     await reset_handler.finish("记忆已清空")
 
+
 set_prob_handler = on_command(
     "设置主动回复概率",
     priority=99,
@@ -383,8 +386,8 @@ async def handle_set_prob(event: GroupMessageEvent, args: Message = CommandArg()
     prob = 0
 
     try:
-        prob=float(args.extract_plain_text().strip())
-        if prob<0 or prob>1:
+        prob = float(args.extract_plain_text().strip())
+        if prob < 0 or prob > 1:
             raise ValueError
     except Exception as e:
         await reset_handler.finish(f"输入有误，请使用 [0,1] 的浮点数\n{e!s}")
@@ -457,7 +460,10 @@ async def load_state():
             state.last_active = state_data["last_active"]
             state.group_prompt = state_data["group_prompt"]
             state.output_reasoning_content = state_data["output_reasoning_content"]
-            state.random_trigger_prob = (state_data.get("random_trigger_prob") or plugin_config.random_trigger_prob)
+            state.random_trigger_prob = (
+                state_data.get("random_trigger_prob")
+                or plugin_config.random_trigger_prob
+            )
             group_states[int(gid)] = state
 
 
