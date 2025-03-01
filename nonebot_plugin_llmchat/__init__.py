@@ -76,7 +76,7 @@ def pop_reasoning_content(
 class GroupState:
     def __init__(self):
         self.preset_name = plugin_config.default_preset
-        self.history = deque(maxlen=plugin_config.history_size)
+        self.history = deque(maxlen=plugin_config.history_size * 2)
         self.queue = asyncio.Queue()
         self.processing = False
         self.last_active = time.time()
@@ -247,7 +247,7 @@ async def process_messages(group_id: int):
                 {"role": "system", "content": systemPrompt}
             ]
 
-            messages += list(state.history)[-plugin_config.history_size :]
+            messages += list(state.history)[-plugin_config.history_size * 2 :]
 
             # 没有未处理的消息说明已经被处理了，跳过
             if state.past_events.__len__() < 1:
@@ -462,7 +462,7 @@ async def load_state():
             state = GroupState()
             state.preset_name = state_data["preset"]
             state.history = deque(
-                state_data["history"], maxlen=plugin_config.history_size
+                state_data["history"], maxlen=plugin_config.history_size * 2
             )
             state.last_active = state_data["last_active"]
             state.group_prompt = state_data["group_prompt"]
