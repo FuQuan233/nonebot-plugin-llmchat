@@ -1,5 +1,3 @@
-from typing import Optional
-
 from pydantic import BaseModel, Field
 
 
@@ -17,10 +15,10 @@ class PresetConfig(BaseModel):
 
 class MCPServerConfig(BaseModel):
     """MCP服务器配置"""
-    command: Optional[str] = Field(None, description="stdio模式下MCP命令")
-    args: Optional[list[str]] = Field([], description="stdio模式下MCP命令参数")
-    env: Optional[dict[str, str]] = Field({}, description="stdio模式下MCP命令环境变量")
-    url: Optional[str] = Field(None, description="sse模式下MCP服务器地址")
+    command: str | None = Field(None, description="stdio模式下MCP命令")
+    args: list[str] | None = Field([], description="stdio模式下MCP命令参数")
+    env: dict[str, str] | None = Field({}, description="stdio模式下MCP命令环境变量")
+    url: str | None = Field(None, description="sse模式下MCP服务器地址")
 
     # 额外字段
     friendly_name: str = Field("", description="MCP服务器友好名称")

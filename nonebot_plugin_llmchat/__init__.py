@@ -6,7 +6,7 @@ import os
 import random
 import re
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import aiofiles
 import httpx
@@ -57,8 +57,8 @@ tasks: set["asyncio.Task"] = set()
 
 
 def pop_reasoning_content(
-    content: Optional[str],
-) -> tuple[Optional[str], Optional[str]]:
+    content: str | None,
+) -> tuple[str | None, str | None]:
     if content is None:
         return None, None
 
@@ -82,7 +82,7 @@ class GroupState:
         self.processing = False
         self.last_active = time.time()
         self.past_events = deque(maxlen=plugin_config.past_events_size)
-        self.group_prompt: Optional[str] = None
+        self.group_prompt: str | None = None
         self.output_reasoning_content = False
         self.random_trigger_prob = plugin_config.random_trigger_prob
 
@@ -333,7 +333,7 @@ async def process_messages(group_id: int):
             reply, matched_reasoning_content = pop_reasoning_content(
                 response.choices[0].message.content
             )
-            reasoning_content: Optional[str] = (
+            reasoning_content: str | None = (
                 getattr(response.choices[0].message, "reasoning_content", None)
                 or matched_reasoning_content
             )
