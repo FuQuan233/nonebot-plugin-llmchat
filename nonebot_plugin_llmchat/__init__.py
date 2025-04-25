@@ -28,6 +28,7 @@ from nonebot.rule import Rule
 from openai import AsyncOpenAI
 
 from .config import Config, PresetConfig
+from .mcpclient import MCPClient
 
 require("nonebot_plugin_localstore")
 import nonebot_plugin_localstore as store
@@ -242,6 +243,11 @@ async def process_messages(group_id: int):
 下面是关于你性格的设定，如果设定中提到让你扮演某个人，或者设定中有提到名字，则优先使用设定中的名字。
 {state.group_prompt or plugin_config.default_prompt}
 """
+            if preset.support_mcp:
+                systemPrompt += f"""
+你也可以使用一些工具，下面是关于这些工具的额外说明：
+{"\n".join([mcp_config.addtional_prompt for mcp_config in plugin_config.mcp_servers.values()])}
+"""
 
             messages: Iterable[ChatCompletionMessageParam] = [
                 {"role": "system", "content": systemPrompt}
@@ -256,19 +262,73 @@ async def process_messages(group_id: int):
             # 将机器人错过的消息推送给LLM
             content = ",".join([format_message(ev) for ev in state.past_events])
 
+            new_messages = [{"role": "user", "content": content}]
+
             logger.debug(
                 f"发送API请求 模型：{preset.model_name} 历史消息数：{len(messages)}"
             )
+            mcp_client = MCPClient(plugin_config.mcp_servers)
+            await mcp_client.connect_to_servers()
+
+            available_tools = await mcp_client.get_available_tools()
+
+            client_config = {
+                "model": preset.model_name,
+                "max_tokens": preset.max_tokens,
+                "temperature": preset.temperature,
+                "timeout": 60,
+            }
+
+            if preset.support_mcp:
+                client_config["tools"] = available_tools
+
             response = await client.chat.completions.create(
-                model=preset.model_name,
-                messages=[*messages, {"role": "user", "content": content}],
-                max_tokens=preset.max_tokens,
-                temperature=preset.temperature,
-                timeout=60,
+                **client_config,
+                messages=messages + new_messages,
             )
 
             if response.usage is not None:
                 logger.debug(f"收到API响应 使用token数：{response.usage.total_tokens}")
+
+            final_message = []
+            message = response.choices[0].message
+            if message.content:
+                final_message.append(message.content)
+
+            # 处理响应并处理工具调用
+            while preset.support_mcp and message.tool_calls:
+                new_messages.append({
+                    "role": "assistant",
+                    "tool_calls": [tool_call.dict() for tool_call in message.tool_calls]
+                })
+                # 处理每个工具调用
+                for tool_call in message.tool_calls:
+                    tool_name = tool_call.function.name
+                    tool_args = json.loads(tool_call.function.arguments)
+
+                    # 发送工具调用提示
+                    await handler.send(Message(f"正在使用{mcp_client.get_friendly_name(tool_name)}"))
+
+                    # 执行工具调用
+                    result = await mcp_client.call_tool(tool_name, tool_args)
+
+                    new_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": str(result.content)
+                    })
+
+                # 将工具调用的结果交给 LLM
+                response = await client.chat.completions.create(
+                    **client_config,
+                    messages=messages + new_messages,
+                )
+
+                message = response.choices[0].message
+                if message.content:
+                    final_message.append(message.content)
+
+            await mcp_client.cleanup()
 
             reply, matched_reasoning_content = pop_reasoning_content(
                 response.choices[0].message.content
@@ -279,9 +339,8 @@ async def process_messages(group_id: int):
             )
 
             # 请求成功后再保存历史记录，保证user和assistant穿插，防止R1模型报错
-            state.history.append({"role": "user", "content": content})
-            # 添加助手回复到历史
-            state.history.append({"role": "assistant", "content": reply})
+            for message in new_messages:
+                state.history.append(message)
             state.past_events.clear()
 
             if state.output_reasoning_content and reasoning_content:
@@ -467,10 +526,7 @@ async def load_state():
             state.last_active = state_data["last_active"]
             state.group_prompt = state_data["group_prompt"]
             state.output_reasoning_content = state_data["output_reasoning_content"]
-            state.random_trigger_prob = (
-                state_data.get("random_trigger_prob")
-                or plugin_config.random_trigger_prob
-            )
+            state.random_trigger_prob = state_data.get("random_trigger_prob", plugin_config.random_trigger_prob)
             group_states[int(gid)] = state
 
 

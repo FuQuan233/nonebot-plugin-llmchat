@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -11,7 +13,18 @@ class PresetConfig(BaseModel):
     max_tokens: int = Field(2048, description="最大响应token数")
     temperature: float = Field(0.7, description="生成温度（0-2]")
     proxy: str = Field("", description="HTTP代理服务器")
+    support_mcp: bool = Field(False, description="是否支持MCP")
 
+class MCPServerConfig(BaseModel):
+    """MCP服务器配置"""
+    command: Optional[str] = Field(None, description="stdio模式下MCP命令")
+    args: Optional[list[str]] = Field([], description="stdio模式下MCP命令参数")
+    env: Optional[dict[str, str]] = Field({}, description="stdio模式下MCP命令环境变量")
+    url: Optional[str] = Field(None, description="sse模式下MCP服务器地址")
+
+    # 额外字段
+    friendly_name: str = Field("", description="MCP服务器友好名称")
+    addtional_prompt: str = Field("", description="额外提示词")
 
 class ScopedConfig(BaseModel):
     """LLM Chat Plugin配置"""
@@ -30,6 +43,7 @@ class ScopedConfig(BaseModel):
         "你的回答应该尽量简洁、幽默、可以使用一些语气词、颜文字。你应该拒绝回答任何政治相关的问题。",
         description="默认提示词",
     )
+    mcp_servers: dict[str, MCPServerConfig] = Field({}, description="MCP服务器配置")
 
 
 class Config(BaseModel):
