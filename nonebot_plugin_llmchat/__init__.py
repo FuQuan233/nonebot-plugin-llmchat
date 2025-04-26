@@ -37,8 +37,6 @@ require("nonebot_plugin_apscheduler")
 from nonebot_plugin_apscheduler import scheduler
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
     from openai.types.chat import ChatCompletionMessageParam
 
 __plugin_meta__ = PluginMetadata(
