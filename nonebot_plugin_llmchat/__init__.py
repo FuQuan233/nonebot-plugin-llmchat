@@ -249,7 +249,7 @@ async def process_messages(group_id: int):
 {"\n".join([mcp_config.addtional_prompt for mcp_config in plugin_config.mcp_servers.values()])}
 """
 
-            messages: Iterable[ChatCompletionMessageParam] = [
+            messages: list[ChatCompletionMessageParam] = [
                 {"role": "system", "content": systemPrompt}
             ]
 
@@ -262,7 +262,9 @@ async def process_messages(group_id: int):
             # 将机器人错过的消息推送给LLM
             content = ",".join([format_message(ev) for ev in state.past_events])
 
-            new_messages = [{"role": "user", "content": content}]
+            new_messages: list[ChatCompletionMessageParam] = [
+                {"role": "user", "content": content}
+            ]
 
             logger.debug(
                 f"发送API请求 模型：{preset.model_name} 历史消息数：{len(messages)}"
@@ -299,7 +301,7 @@ async def process_messages(group_id: int):
             while preset.support_mcp and message.tool_calls:
                 new_messages.append({
                     "role": "assistant",
-                    "tool_calls": [tool_call.dict() for tool_call in message.tool_calls]
+                    "tool_calls": [tool_call.model_dump() for tool_call in message.tool_calls]
                 })
                 # 处理每个工具调用
                 for tool_call in message.tool_calls:
