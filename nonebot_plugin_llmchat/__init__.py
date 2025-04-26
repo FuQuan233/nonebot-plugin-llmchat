@@ -242,10 +242,8 @@ async def process_messages(group_id: int):
 {state.group_prompt or plugin_config.default_prompt}
 """
             if preset.support_mcp:
-                systemPrompt += f"""
-你也可以使用一些工具，下面是关于这些工具的额外说明：
-{"\n".join([mcp_config.addtional_prompt for mcp_config in plugin_config.mcp_servers.values()])}
-"""
+                systemPrompt += "你也可以使用一些工具，下面是关于这些工具的额外说明：\n"
+                systemPrompt += "\n".join([mcp_config.addtional_prompt for mcp_config in plugin_config.mcp_servers.values()])
 
             messages: list[ChatCompletionMessageParam] = [
                 {"role": "system", "content": systemPrompt}
