@@ -70,7 +70,7 @@ class MCPClient:
 
     def get_friendly_name(self, tool_name: str):
         server_name, real_tool_name = tool_name.split("___")
-        return self.server_config[server_name].friendly_name + " - " + real_tool_name
+        return (self.server_config[server_name].friendly_name or server_name) + " - " + real_tool_name
 
     async def cleanup(self):
         logger.debug("正在清理MCPClient资源")
