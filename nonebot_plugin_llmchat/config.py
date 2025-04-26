@@ -21,8 +21,8 @@ class MCPServerConfig(BaseModel):
     url: str | None = Field(None, description="sse模式下MCP服务器地址")
 
     # 额外字段
-    friendly_name: str = Field("", description="MCP服务器友好名称")
-    addtional_prompt: str = Field("", description="额外提示词")
+    friendly_name: str | None = Field(None, description="MCP服务器友好名称")
+    addtional_prompt: str | None = Field(None, description="额外提示词")
 
 class ScopedConfig(BaseModel):
     """LLM Chat Plugin配置"""
