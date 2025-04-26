@@ -8,7 +8,7 @@
 
 # nonebot-plugin-llmchat
 
-_✨ 支持多API预设配置的AI群聊插件 ✨_
+_✨ 支持多API预设、MCP协议、联网搜索的AI群聊插件 ✨_
 
 
 <a href="./LICENSE">
@@ -23,27 +23,32 @@ _✨ 支持多API预设配置的AI群聊插件 ✨_
 
 ## 📖 介绍
 
-1. **多API预设支持**
+1. **支持MCP协议**
+   - 可以连接各种支持MCP协议的LLM工具
+   - 通过连接一些搜索MCP服务器可以实现在线搜索
+   - 兼容 Claude.app 的配置格式
+
+2. **多API预设支持**
    - 可配置多个LLM服务预设（如不同模型/API密钥）
    - 支持运行时通过`API预设`命令热切换API配置
    - 内置服务开关功能（预设名为`off`时停用）
 
-2. **多种回复触发方式**
+3. **多种回复触发方式**
    - @触发 + 随机概率触发
    - 支持处理回复消息
    - 群聊消息顺序处理，防止消息错乱
 
-3. **分群聊上下文记忆管理**
+4. **分群聊上下文记忆管理**
    - 分群聊保留对话历史记录（可配置保留条数）
    - 自动合并未处理消息，降低API用量
    - 支持`记忆清除`命令手动重置对话上下文
 
-4. **分段回复支持**
+5. **分段回复支持**
    - 支持多段式回复（由LLM决定如何回复）
    - 可@群成员（由LLM插入）
    - 可选输出AI的思维过程（需模型支持）
 
-5. **可自定义性格**
+6. **可自定义性格**
    - 可动态修改群组专属系统提示词（`/修改设定`）
    - 支持自定义默认提示词
 
@@ -102,6 +107,7 @@ _✨ 支持多API预设配置的AI群聊插件 ✨_
 | LLMCHAT__DEFAULT_PRESET | 否 | off | 默认使用的预设名称，配置为off则为关闭 |
 | LLMCHAT__RANDOM_TRIGGER_PROB | 否 | 0.05 | 默认随机触发概率 [0, 1] |
 | LLMCHAT__DEFAULT_PROMPT | 否 | 你的回答应该尽量简洁、幽默、可以使用一些语气词、颜文字。你应该拒绝回答任何政治相关的问题。 | 默认提示词 |
+| LLMCHAT__MCP_SERVERS | 否 | {} | MCP服务器配置，具体见下表 |
 
 其中LLMCHAT__API_PRESETS为一个列表，每项配置有以下的配置项
 | 配置项 | 必填 | 默认值 | 说明 |
@@ -113,6 +119,21 @@ _✨ 支持多API预设配置的AI群聊插件 ✨_
 | max_tokens | 否 | 2048 | 最大响应token数 |
 | temperature | 否 | 0.7 | 生成温度 |
 | proxy | 否 | 无 | 请求API时使用的HTTP代理 |
+
+
+LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的格式基本兼容 Claude.app 的配置格式，具体支持如下
+| 配置项 | 必填 | 默认值 | 说明 |
+|:-----:|:----:|:----:|:----:|
+| command | stdio服务器必填 | 无 | stdio服务器MCP命令 |
+| arg | 否 | [] | stdio服务器MCP命令参数 |
+| env | 否 | {} | stdio服务器环境变量 |
+| url | sse服务器必填 | 无 | sse服务器地址 |
+
+以下为在 Claude.app 的MCP服务器配置基础上增加的字段
+| 配置项 | 必填 | 默认值 | 说明 |
+|:-----:|:----:|:----:|:----:|
+| friendly_name | 否 | 无 | 友好名称，用于调用时发送提示信息 |
+| additional_prompt | 否 | 无 | 关于这个工具的附加提示词 |
 
 <details open>
 <summary>配置示例</summary>
@@ -136,6 +157,20 @@ _✨ 支持多API预设配置的AI群聊插件 ✨_
         "api_base": "https://api.deepseek.com"
     }
     ]
+    LLMCHAT__MCP_SERVERS='
+        {
+        "AISearch": {
+            "friendly_name": "百度搜索",
+            "additional_prompt": "遇到你不知道的问题或者时效性比较强的问题时，可以使用AISearch搜索，在使用AISearch时不要使用其他AI模型。",
+            "url": "http://appbuilder.baidu.com/v2/ai_search/mcp/sse?api_key=Bearer+<your-api-key>"
+        },
+        "fetch": {
+            "friendly_name": "网页浏览",
+            "command": "uvx",
+            "args": ["mcp-server-fetch"]
+        }
+    }
+    '
     '
     
 </details>
@@ -159,4 +194,5 @@ _✨ 支持多API预设配置的AI群聊插件 ✨_
 | 设置主动回复概率 | 管理 | 否 | 群聊 | 主动回复概率 | 主动回复概率需为 [0, 1] 的浮点数，0为完全关闭主动回复 |
 
 ### 效果图
+![](img/mcp_demo.jpg)
 ![](img/demo.png)
