@@ -268,10 +268,6 @@ async def process_messages(group_id: int):
             logger.debug(
                 f"发送API请求 模型：{preset.model_name} 历史消息数：{len(messages)}"
             )
-            mcp_client = MCPClient(plugin_config.mcp_servers)
-            await mcp_client.connect_to_servers()
-
-            available_tools = await mcp_client.get_available_tools()
 
             client_config = {
                 "model": preset.model_name,
@@ -280,7 +276,10 @@ async def process_messages(group_id: int):
                 "timeout": 60,
             }
 
+            mcp_client = MCPClient(plugin_config.mcp_servers)
             if preset.support_mcp:
+                await mcp_client.connect_to_servers()
+                available_tools = await mcp_client.get_available_tools()
                 client_config["tools"] = available_tools
 
             response = await client.chat.completions.create(
@@ -291,10 +290,7 @@ async def process_messages(group_id: int):
             if response.usage is not None:
                 logger.debug(f"收到API响应 使用token数：{response.usage.total_tokens}")
 
-            final_message = []
             message = response.choices[0].message
-            if message.content:
-                final_message.append(message.content)
 
             # 处理响应并处理工具调用
             while preset.support_mcp and message.tool_calls:
@@ -302,6 +298,11 @@ async def process_messages(group_id: int):
                     "role": "assistant",
                     "tool_calls": [tool_call.model_dump() for tool_call in message.tool_calls]
                 })
+
+                # 发送LLM调用工具时的回复，一般没有
+                if message.content:
+                    await handler.send(Message(message.content))
+
                 # 处理每个工具调用
                 for tool_call in message.tool_calls:
                     tool_name = tool_call.function.name
@@ -326,8 +327,6 @@ async def process_messages(group_id: int):
                 )
 
                 message = response.choices[0].message
-                if message.content:
-                    final_message.append(message.content)
 
             await mcp_client.cleanup()
 
@@ -338,6 +337,11 @@ async def process_messages(group_id: int):
                 getattr(response.choices[0].message, "reasoning_content", None)
                 or matched_reasoning_content
             )
+
+            new_messages.append({
+                "role": "assistant",
+                "content": reply,
+            })
 
             # 请求成功后再保存历史记录，保证user和assistant穿插，防止R1模型报错
             for message in new_messages:
