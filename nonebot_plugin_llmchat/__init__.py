@@ -252,6 +252,9 @@ async def process_messages(group_id: int):
                 {"role": "system", "content": systemPrompt}
             ]
 
+            while len(state.history) > 0 and state.history[0]["role"] != "user":
+                state.history.popleft()
+
             messages += list(state.history)[-plugin_config.history_size * 2 :]
 
             # 没有未处理的消息说明已经被处理了，跳过
