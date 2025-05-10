@@ -12,6 +12,7 @@ class PresetConfig(BaseModel):
     temperature: float = Field(0.7, description="生成温度（0-2]")
     proxy: str = Field("", description="HTTP代理服务器")
     support_mcp: bool = Field(False, description="是否支持MCP")
+    support_image: bool = Field(False, description="是否支持图片输入")
 
 class MCPServerConfig(BaseModel):
     """MCP服务器配置"""
