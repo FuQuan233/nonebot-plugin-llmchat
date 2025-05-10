@@ -6,6 +6,8 @@ import os
 import random
 import re
 import time
+import base64
+import ssl
 from typing import TYPE_CHECKING
 
 import aiofiles
@@ -197,6 +199,32 @@ async def handle_message(event: GroupMessageEvent):
         task.add_done_callback(tasks.discard)
         tasks.add(task)
 
+async def process_images(event: GroupMessageEvent) -> list[str]:
+    base64_images = []
+    for segement in event.get_message():
+        if segement.type == "image":
+            image_url = segement.data.get("url")
+            if image_url:
+                try:
+                    # 处理高版本 httpx 的 [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] 报错
+                    ssl_context = ssl.create_default_context()
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+                    ssl_context.set_ciphers('DEFAULT@SECLEVEL=2')
+
+                    # 下载图片并将图片转换为base64
+                    async with httpx.AsyncClient(verify=ssl_context) as client:
+                        response = await client.get(image_url, timeout=10.0)
+                        if response.status_code != 200:
+                            logger.error(f"下载图片失败: {image_url}, 状态码: {response.status_code}")
+                            continue
+                        image_data = response.content
+                        base64_data = base64.b64encode(image_data).decode('utf-8')
+                        base64_images.append(base64_data)
+                except Exception as e:
+                    logger.error(f"处理图片时出错: {e}")
+    logger.debug(f"共处理 {len(base64_images)} 张图片")
+    return base64_images
 
 async def process_messages(group_id: int):
     state = group_states[group_id]
@@ -260,9 +288,17 @@ async def process_messages(group_id: int):
             # 没有未处理的消息说明已经被处理了，跳过
             if state.past_events.__len__() < 1:
                 break
+            
+            # 将消息中的图片转成 base64
+            base64_images = []
+            if preset.support_image:
+                base64_images = await process_images(event)
 
             # 将机器人错过的消息推送给LLM
             content = ",".join([format_message(ev) for ev in state.past_events])
+            content = [{"type": "text", "text": content}]
+            for base64_image in base64_images:
+                content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}})
 
             new_messages: list[ChatCompletionMessageParam] = [
                 {"role": "user", "content": content}
