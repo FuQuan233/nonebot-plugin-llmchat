@@ -166,6 +166,10 @@ async def is_triggered(event: GroupMessageEvent) -> bool:
     if state.preset_name == "off":
         return False
 
+    # 黑名单用户
+    if event.user_id in plugin_config.blacklist_user_ids:
+        return False
+
     state.past_events.append(event)
 
     # 原有@触发条件
