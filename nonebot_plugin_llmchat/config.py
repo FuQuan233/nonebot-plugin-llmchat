@@ -43,6 +43,7 @@ class ScopedConfig(BaseModel):
         description="默认提示词",
     )
     mcp_servers: dict[str, MCPServerConfig] = Field({}, description="MCP服务器配置")
+    blacklist_user_ids: set[int] = Field(set(), description="黑名单用户ID列表")
 
 
 class Config(BaseModel):
