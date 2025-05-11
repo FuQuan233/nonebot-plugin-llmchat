@@ -8,7 +8,7 @@
 
 # nonebot-plugin-llmchat
 
-_✨ 支持多API预设、MCP协议、联网搜索的AI群聊插件 ✨_
+_✨ 支持多API预设、MCP协议、联网搜索、视觉模型的AI群聊插件 ✨_
 
 
 <a href="./LICENSE">
@@ -119,6 +119,8 @@ _✨ 支持多API预设、MCP协议、联网搜索的AI群聊插件 ✨_
 | max_tokens | 否 | 2048 | 最大响应token数 |
 | temperature | 否 | 0.7 | 生成温度 |
 | proxy | 否 | 无 | 请求API时使用的HTTP代理 |
+| support_mcp | 否 | False | 是否支持MCP协议 |
+| support_image | 否 | False | 是否支持图片输入 |
 
 
 LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的格式基本兼容 Claude.app 的配置格式，具体支持如下
@@ -151,10 +153,18 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
         "proxy": "http://10.0.0.183:7890"
     },
     {
-        "name": "deepseek-r1",
+        "name": "deepseek-v1",
         "api_key": "sk-your-api-key",
-        "model_name": "deepseek-reasoner",
-        "api_base": "https://api.deepseek.com"
+        "model_name": "deepseek-chat",
+        "api_base": "https://api.deepseek.com",
+        "support_mcp": true
+    },
+    {
+        "name": "some-vison-model",
+        "api_key": "sk-your-api-key",
+        "model_name": "some-vison-model",
+        "api_base": "https://some-vison-model.com/api",
+        "support_image": true
     }
     ]
     LLMCHAT__MCP_SERVERS='
