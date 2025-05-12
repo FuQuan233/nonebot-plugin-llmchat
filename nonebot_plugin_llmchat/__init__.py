@@ -211,7 +211,7 @@ async def process_images(event: GroupMessageEvent) -> list[str]:
     base64_images = []
     for segement in event.get_message():
         if segement.type == "image":
-            image_url = segement.data.get("url")
+            image_url = segement.data.get("url") or segement.data.get("file")
             if image_url:
                 try:
                     # 处理高版本 httpx 的 [SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] 报错
