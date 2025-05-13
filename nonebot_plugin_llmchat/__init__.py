@@ -185,7 +185,7 @@ async def is_triggered(event: GroupMessageEvent) -> bool:
 # 消息处理器
 handler = on_message(
     rule=Rule(is_triggered),
-    priority=10,
+    priority=99,
     block=False,
 )
 
@@ -459,7 +459,7 @@ async def handle_preset(event: GroupMessageEvent, args: Message = CommandArg()):
 
 edit_preset_handler = on_command(
     "修改设定",
-    priority=99,
+    priority=1,
     block=True,
     permission=(SUPERUSER | GROUP_ADMIN | GROUP_OWNER),
 )
@@ -476,7 +476,7 @@ async def handle_edit_preset(event: GroupMessageEvent, args: Message = CommandAr
 
 reset_handler = on_command(
     "记忆清除",
-    priority=99,
+    priority=1,
     block=True,
     permission=(SUPERUSER | GROUP_ADMIN | GROUP_OWNER),
 )
@@ -493,7 +493,7 @@ async def handle_reset(event: GroupMessageEvent, args: Message = CommandArg()):
 
 set_prob_handler = on_command(
     "设置主动回复概率",
-    priority=99,
+    priority=1,
     block=True,
     permission=(SUPERUSER | GROUP_ADMIN | GROUP_OWNER),
 )
