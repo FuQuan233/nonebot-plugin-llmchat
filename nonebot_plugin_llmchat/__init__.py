@@ -234,6 +234,20 @@ async def process_images(event: GroupMessageEvent) -> list[str]:
     logger.debug(f"共处理 {len(base64_images)} 张图片")
     return base64_images
 
+async def send_split_messages(message_handler, content: str):
+    """
+    将消息按分隔符<botbr>分段并发送
+    """
+    logger.info(f"准备发送分段消息，分段数：{len(content.split('<botbr>'))}")
+    for segment in content.split("<botbr>"):
+        # 跳过空消息
+        if not segment.strip():
+            continue
+        segment = segment.strip()  # 删除前后多余的换行和空格
+        await asyncio.sleep(2)  # 避免发送过快
+        logger.debug(f"发送消息分段 内容：{segment[:50]}...")  # 只记录前50个字符避免日志过大
+        await message_handler.send(Message(segment))
+
 async def process_messages(group_id: int):
     state = group_states[group_id]
     preset = get_preset(group_id)
@@ -350,7 +364,7 @@ async def process_messages(group_id: int):
 
                 # 发送LLM调用工具时的回复，一般没有
                 if message.content:
-                    await handler.send(Message(message.content))
+                    await send_split_messages(handler, message.content)
 
                 # 处理每个工具调用
                 for tool_call in message.tool_calls:
@@ -410,20 +424,7 @@ async def process_messages(group_id: int):
                     logger.error(f"合并转发消息发送失败：\n{e!s}\n")
 
             assert reply is not None
-            logger.info(
-                f"准备发送回复消息 群号：{group_id} 消息分段数：{len(reply.split('<botbr>'))}"
-            )
-            for r in reply.split("<botbr>"):
-                # 似乎会有空消息的情况导致string index out of range异常
-                if len(r) == 0 or r.isspace():
-                    continue
-                # 删除前后多余的换行和空格
-                r = r.strip()
-                await asyncio.sleep(2)
-                logger.debug(
-                    f"发送消息分段 内容：{r[:50]}..."
-                )  # 只记录前50个字符避免日志过大
-                await handler.send(Message(r))
+            await send_split_messages(handler, reply)
 
         except Exception as e:
             logger.opt(exception=e).error(f"API请求失败 群号：{group_id}")
