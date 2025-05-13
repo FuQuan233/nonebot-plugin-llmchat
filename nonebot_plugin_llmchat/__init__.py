@@ -40,8 +40,7 @@ from nonebot_plugin_apscheduler import scheduler
 
 if TYPE_CHECKING:
     from openai.types.chat import (
-        ChatCompletionContentPartImageParam,
-        ChatCompletionContentPartTextParam,
+        ChatCompletionContentPartParam,
         ChatCompletionMessageParam,
     )
 
@@ -311,18 +310,17 @@ async def process_messages(group_id: int):
             if state.past_events.__len__() < 1:
                 break
 
-            # 将消息中的图片转成 base64
-            base64_images = []
-            if preset.support_image:
-                base64_images = await process_images(event)
+            content: list[ChatCompletionContentPartParam] = []
 
             # 将机器人错过的消息推送给LLM
-            text_content = ",".join([format_message(ev) for ev in state.past_events])
-            content: list[ChatCompletionContentPartTextParam | ChatCompletionContentPartImageParam] = [
-                {"type": "text", "text": text_content}
-            ]
-            for base64_image in base64_images:
-                content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}})
+            for ev in state.past_events:
+                content.append({"type": "text", "text": format_message(ev)})
+
+                # 将消息中的图片转成 base64
+                if preset.support_image:
+                    base64_images = await process_images(ev)
+                    for base64_image in base64_images:
+                        content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}})
 
             new_messages: list[ChatCompletionMessageParam] = [
                 {"role": "user", "content": content}
