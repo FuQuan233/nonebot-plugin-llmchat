@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
 __plugin_meta__ = PluginMetadata(
     name="llmchat",
-    description="支持多API预设、MCP协议、联网搜索的AI群聊插件",
+    description="支持多API预设、MCP协议、联网搜索、视觉模型的AI群聊插件",
     usage="""@机器人 + 消息 开启对话""",
     type="application",
     homepage="https://github.com/FuQuan233/nonebot-plugin-llmchat",
