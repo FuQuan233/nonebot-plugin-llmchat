@@ -313,8 +313,10 @@ async def process_messages(group_id: int):
             content: list[ChatCompletionContentPartParam] = []
 
             # 将机器人错过的消息推送给LLM
-            for ev in state.past_events:
-                content.append({"type": "text", "text": format_message(ev)})
+            past_events_snapshot = list(state.past_events)
+            for ev in past_events_snapshot:
+                text_content = ",".join([format_message(ev) for ev in past_events_snapshot])
+                content.append({"type": "text", "text": text_content})
 
                 # 将消息中的图片转成 base64
                 if preset.support_image:
