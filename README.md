@@ -18,6 +18,7 @@ _✨ 支持多API预设、MCP协议、联网搜索、视觉模型的AI群聊插�
     <img src="https://img.shields.io/pypi/v/nonebot-plugin-llmchat.svg" alt="pypi">
 </a>
 <img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="python">
+<a href="https://deepwiki.com/FuQuan233/nonebot-plugin-llmchat"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 
 </div>
 
