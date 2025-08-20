@@ -380,7 +380,7 @@ async def process_messages(group_id: int):
                     new_messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
-                        "content": str(result.content)
+                        "content": str(result)
                     })
 
                 # 将工具调用的结果交给 LLM
