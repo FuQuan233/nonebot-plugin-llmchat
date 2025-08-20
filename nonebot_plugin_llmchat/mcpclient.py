@@ -1,4 +1,5 @@
 from contextlib import AsyncExitStack
+import asyncio
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
@@ -64,9 +65,15 @@ class MCPClient:
         server_name, real_tool_name = tool_name.split("___")
         logger.info(f"正在服务器[{server_name}]上调用工具[{real_tool_name}]")
         session = self.sessions[server_name]
-        response = await session.call_tool(real_tool_name, tool_args)
+        try:
+            response = await asyncio.wait_for(
+                session.call_tool(real_tool_name, tool_args), timeout=10
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"调用工具[{real_tool_name}]超时")
+            return f"调用工具[{real_tool_name}]超时"
         logger.debug(f"工具[{real_tool_name}]调用完成，响应: {response}")
-        return response
+        return response.content
 
     def get_friendly_name(self, tool_name: str):
         server_name, real_tool_name = tool_name.split("___")
