@@ -66,7 +66,7 @@ class MCPClient:
         logger.info(f"正在服务器[{server_name}]上调用工具[{real_tool_name}]")
         session = self.sessions[server_name]
         try:
-            response = await asyncio.wait_for(session.call_tool(real_tool_name, tool_args), timeout=10)
+            response = await asyncio.wait_for(session.call_tool(real_tool_name, tool_args), timeout=30)
         except asyncio.TimeoutError:
             logger.error(f"调用工具[{real_tool_name}]超时")
             return f"调用工具[{real_tool_name}]超时"
