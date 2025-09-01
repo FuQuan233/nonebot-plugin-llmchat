@@ -169,6 +169,12 @@ async def is_triggered(event: GroupMessageEvent) -> bool:
     if event.user_id in plugin_config.blacklist_user_ids:
         return False
 
+    # 忽略特定前缀的消息
+    msg_text = event.get_plaintext().strip()
+    for prefix in plugin_config.ignore_prefixes:
+        if msg_text.startswith(prefix):
+            return False
+
     state.past_events.append(event)
 
     # 原有@触发条件

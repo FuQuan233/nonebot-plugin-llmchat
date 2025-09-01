@@ -109,6 +109,7 @@ _✨ 支持多API预设、MCP协议、联网搜索、视觉模型的AI群聊插�
 | LLMCHAT__RANDOM_TRIGGER_PROB | 否 | 0.05 | 默认随机触发概率 [0, 1] |
 | LLMCHAT__DEFAULT_PROMPT | 否 | 你的回答应该尽量简洁、幽默、可以使用一些语气词、颜文字。你应该拒绝回答任何政治相关的问题。 | 默认提示词 |
 | LLMCHAT__BLACKLIST_USER_IDS | 否 | [] | 黑名单用户ID列表，机器人将不会处理黑名单用户的消息 |
+| LLMCHAT__IGNORE_PREFIXES | 否 | [] | 需要忽略的消息前缀列表，匹配到这些前缀的消息不会处理 |
 | LLMCHAT__MCP_SERVERS | 否 | {} | MCP服务器配置，具体见下表 |
 
 其中LLMCHAT__API_PRESETS为一个列表，每项配置有以下的配置项

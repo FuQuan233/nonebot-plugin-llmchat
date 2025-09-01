@@ -44,6 +44,10 @@ class ScopedConfig(BaseModel):
     )
     mcp_servers: dict[str, MCPServerConfig] = Field({}, description="MCP服务器配置")
     blacklist_user_ids: set[int] = Field(set(), description="黑名单用户ID列表")
+    ignore_prefixes: list[str] = Field(
+        default_factory=list,
+        description="需要忽略的消息前缀列表，匹配到这些前缀的消息不会处理"
+    )
 
 
 class Config(BaseModel):
