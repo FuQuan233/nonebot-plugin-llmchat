@@ -21,7 +21,7 @@ from nonebot import (
     on_message,
     require,
 )
-from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message
+from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message, MessageSegment
 from nonebot.adapters.onebot.v11.permission import GROUP_ADMIN, GROUP_OWNER
 from nonebot.params import CommandArg
 from nonebot.permission import SUPERUSER
@@ -407,10 +407,18 @@ async def process_messages(group_id: int):
                 or matched_reasoning_content
             )
 
-            new_messages.append({
+            llm_reply: ChatCompletionMessageParam = {
                 "role": "assistant",
                 "content": reply,
-            })
+            }
+
+            reply_images = getattr(response.choices[0].message, "images", None)
+
+            if reply_images:
+                # openai的sdk里的assistant消息暂时没有images字段，需要单独处理
+                llm_reply["images"] = reply_images # pyright: ignore[reportGeneralTypeIssues]
+
+            new_messages.append(llm_reply)
 
             # 请求成功后再保存历史记录，保证user和assistant穿插，防止R1模型报错
             for message in new_messages:
@@ -431,6 +439,14 @@ async def process_messages(group_id: int):
 
             assert reply is not None
             await send_split_messages(handler, reply)
+
+            if reply_images:
+                logger.debug(f"API响应 图片数：{len(reply_images)}")
+                for i, image in enumerate(reply_images, start=1):
+                    logger.debug(f"正在发送第{i}张图片")
+                    image_base64 = image["image_url"]["url"].removeprefix("data:image/png;base64,")
+                    image_msg = MessageSegment.image(base64.b64decode(image_base64))
+                    await handler.send(image_msg)
 
         except Exception as e:
             logger.opt(exception=e).error(f"API请求失败 群号：{group_id}")
