@@ -20,6 +20,7 @@ class MCPServerConfig(BaseModel):
     args: list[str] | None = Field([], description="stdio模式下MCP命令参数")
     env: dict[str, str] | None = Field({}, description="stdio模式下MCP命令环境变量")
     url: str | None = Field(None, description="sse模式下MCP服务器地址")
+    headers: dict[str, str] | None = Field({}, description="sse模式下http请求头，用于认证或其他设置")
 
     # 额外字段
     friendly_name: str | None = Field(None, description="MCP服务器友好名称")

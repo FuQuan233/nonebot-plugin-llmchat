@@ -22,7 +22,7 @@ class MCPClient:
         for server_name, config in self.server_config.items():
             logger.debug(f"正在连接服务器[{server_name}]")
             if config.url:
-                sse_transport = await self.exit_stack.enter_async_context(sse_client(url=config.url))
+                sse_transport = await self.exit_stack.enter_async_context(sse_client(url=config.url, headers=config.headers))
                 read, write = sse_transport
                 self.sessions[server_name] = await self.exit_stack.enter_async_context(ClientSession(read, write))
                 await self.sessions[server_name].initialize()
@@ -74,6 +74,7 @@ class MCPClient:
         return response.content
 
     def get_friendly_name(self, tool_name: str):
+        logger.debug(tool_name)
         server_name, real_tool_name = tool_name.split("___")
         return (self.server_config[server_name].friendly_name or server_name) + " - " + real_tool_name
 

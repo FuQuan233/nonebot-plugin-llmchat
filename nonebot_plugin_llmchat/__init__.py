@@ -278,6 +278,8 @@ async def process_messages(group_id: int):
     while not state.queue.empty():
         event = await state.queue.get()
         logger.debug(f"从队列获取消息 群号：{group_id} 消息ID：{event.message_id}")
+        past_events_snapshot = []
+        mcp_client = MCPClient(plugin_config.mcp_servers)
         try:
             systemPrompt = f"""
 我想要你帮我在群聊中闲聊，大家一般叫你{"、".join(list(driver.config.nickname))}，我将会在后面的信息中告诉你每条群聊信息的发送者和发送时间，你可以直接称呼发送者为他对应的昵称。
@@ -320,6 +322,7 @@ async def process_messages(group_id: int):
 
             # 将机器人错过的消息推送给LLM
             past_events_snapshot = list(state.past_events)
+            state.past_events.clear()
             for ev in past_events_snapshot:
                 text_content = format_message(ev)
                 content.append({"type": "text", "text": text_content})
@@ -345,7 +348,6 @@ async def process_messages(group_id: int):
                 "timeout": 60,
             }
 
-            mcp_client = MCPClient(plugin_config.mcp_servers)
             if preset.support_mcp:
                 await mcp_client.connect_to_servers()
                 available_tools = await mcp_client.get_available_tools()
@@ -397,8 +399,6 @@ async def process_messages(group_id: int):
 
                 message = response.choices[0].message
 
-            await mcp_client.cleanup()
-
             reply, matched_reasoning_content = pop_reasoning_content(
                 response.choices[0].message.content
             )
@@ -423,7 +423,6 @@ async def process_messages(group_id: int):
             # 请求成功后再保存历史记录，保证user和assistant穿插，防止R1模型报错
             for message in new_messages:
                 state.history.append(message)
-            state.past_events.clear()
 
             if state.output_reasoning_content and reasoning_content:
                 try:
@@ -450,11 +449,13 @@ async def process_messages(group_id: int):
 
         except Exception as e:
             logger.opt(exception=e).error(f"API请求失败 群号：{group_id}")
+            # 如果在处理过程中出现异常，恢复未处理的消息到state中
+            state.past_events.extendleft(reversed(past_events_snapshot))
             await handler.send(Message(f"服务暂时不可用，请稍后再试\n{e!s}"))
         finally:
+            state.processing = False
             state.queue.task_done()
-
-    state.processing = False
+            await mcp_client.cleanup()
 
 
 # 预设切换命令
