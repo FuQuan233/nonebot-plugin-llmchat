@@ -137,6 +137,7 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 | arg | 否 | [] | stdio服务器MCP命令参数 |
 | env | 否 | {} | stdio服务器环境变量 |
 | url | sse服务器必填 | 无 | sse服务器地址 |
+| headers | 否 | {} | sse模式下http请求头，用于认证或其他设置 |
 
 以下为在 Claude.app 的MCP服务器配置基础上增加的字段
 | 配置项 | 必填 | 默认值 | 说明 |
@@ -179,7 +180,10 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
         "AISearch": {
             "friendly_name": "百度搜索",
             "additional_prompt": "遇到你不知道的问题或者时效性比较强的问题时，可以使用AISearch搜索，在使用AISearch时不要使用其他AI模型。",
-            "url": "http://appbuilder.baidu.com/v2/ai_search/mcp/sse?api_key=Bearer+<your-api-key>"
+            "url": "http://appbuilder.baidu.com/v2/ai_search/mcp/sse?api_key=Bearer+<your-api-key>",
+            "headers": {
+                "Authorization": "<some-api-key>"
+            }
         },
         "fetch": {
             "friendly_name": "网页浏览",
