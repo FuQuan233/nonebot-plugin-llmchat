@@ -279,7 +279,7 @@ async def process_messages(group_id: int):
         event = await state.queue.get()
         logger.debug(f"从队列获取消息 群号：{group_id} 消息ID：{event.message_id}")
         past_events_snapshot = []
-        mcp_client = MCPClient(plugin_config.mcp_servers)
+        mcp_client = MCPClient.get_instance(plugin_config.mcp_servers)
         try:
             systemPrompt = f"""
 我想要你帮我在群聊中闲聊，大家一般叫你{"、".join(list(driver.config.nickname))}，我将会在后面的信息中告诉你每条群聊信息的发送者和发送时间，你可以直接称呼发送者为他对应的昵称。
@@ -349,7 +349,6 @@ async def process_messages(group_id: int):
             }
 
             if preset.support_mcp:
-                await mcp_client.connect_to_servers()
                 available_tools = await mcp_client.get_available_tools()
                 client_config["tools"] = available_tools
 
@@ -455,7 +454,8 @@ async def process_messages(group_id: int):
         finally:
             state.processing = False
             state.queue.task_done()
-            await mcp_client.cleanup()
+            # 不再需要每次都清理MCPClient，因为它现在是单例
+            # await mcp_client.cleanup()
 
 
 # 预设切换命令
@@ -621,3 +621,5 @@ async def init_plugin():
 async def cleanup_plugin():
     logger.info("插件关闭清理")
     await save_state()
+    # 销毁MCPClient单例
+    await MCPClient.destroy_instance()
