@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nonebot-plugin-llmchat"
-version = "0.3.1"
+version = "0.4.0"
 description = "Nonebot AI group chat plugin supporting multiple API preset configurations"
 license = "GPL"
 authors = ["FuQuan i@fuquan.moe"]
