@@ -15,7 +15,7 @@ class OneBotTools:
                 "type": "function",
                 "function": {
                     "name": "ob__mute_user",
-                    "description": "禁言指定用户一段时间。需要机器人有管理员权限。不要随便禁言别人，你应该只听群主或者管理员你的话。",
+                    "description": "禁言指定用户一段时间。需要机器人有管理员权限。不能随便禁言成员，你应该听从管理员的指令。",
                     "parameters": {
                         "type": "object",
                         "properties": {
