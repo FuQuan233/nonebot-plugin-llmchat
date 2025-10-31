@@ -381,8 +381,13 @@ async def process_messages(group_id: int):
                     # 发送工具调用提示
                     await handler.send(Message(f"正在使用{mcp_client.get_friendly_name(tool_name)}"))
 
-                    # 执行工具调用
-                    result = await mcp_client.call_tool(tool_name, tool_args)
+                    # 执行工具调用，传递群组和机器人信息用于QQ工具
+                    result = await mcp_client.call_tool(
+                        tool_name,
+                        tool_args,
+                        group_id=event.group_id,
+                        bot_id=str(event.self_id)
+                    )
 
                     new_messages.append({
                         "role": "tool",

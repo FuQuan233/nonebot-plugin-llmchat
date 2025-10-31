@@ -8,7 +8,7 @@
 
 # nonebot-plugin-llmchat
 
-_✨ 支持多API预设、MCP协议、联网搜索、视觉模型的AI群聊插件 ✨_
+_✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型的AI群聊插件 ✨_
 
 
 <a href="./LICENSE">
@@ -32,6 +32,11 @@ _✨ 支持多API预设、MCP协议、联网搜索、视觉模型的AI群聊插�
    - 可以连接各种支持MCP协议的LLM工具
    - 通过连接一些搜索MCP服务器可以实现在线搜索
    - 兼容 Claude.app 的配置格式
+
+1. **内置工具**
+   - 内置OneBot群操作工具，LLM可直接进行群管理操作（需模型支持tool_call）
+   - 支持禁言用户、获取群信息、查看群成员等功能
+   - 支持戳一戳、撤回消息等互动功能
 
 1. **多API预设支持**
    - 可配置多个LLM服务预设（如不同模型/API密钥）
@@ -115,6 +120,22 @@ _✨ 支持多API预设、MCP协议、联网搜索、视觉模型的AI群聊插�
 | LLMCHAT__BLACKLIST_USER_IDS | 否 | [] | 黑名单用户ID列表，机器人将不会处理黑名单用户的消息 |
 | LLMCHAT__IGNORE_PREFIXES | 否 | [] | 需要忽略的消息前缀列表，匹配到这些前缀的消息不会处理 |
 | LLMCHAT__MCP_SERVERS | 否 | {} | MCP服务器配置，具体见下表 |
+
+### 内置OneBot工具
+
+插件内置了以下工具，LLM可以直接调用这些工具进行群操作（需模型支持tool_call），这些工具不需要额外配置：
+
+| 工具名称 | 说明 | 权限要求 |
+|:-----:|:----:|:----:|
+| ob__mute_user | 禁言指定用户 | 机器人需要管理员权限 |
+| ob__get_group_info | 获取群信息 | 无 |
+| ob__get_group_member_info | 获取指定群成员信息 | 无 |
+| ob__get_group_member_list | 获取群成员列表 | 无 |
+| ob__poke_user | 戳一戳指定用户 | 无 |
+| ob__recall_message | 撤回指定消息 | 机器人需要管理员权限或为消息发送者 |
+
+
+### MCP服务器配置
 
 其中LLMCHAT__API_PRESETS为一个列表，每项配置有以下的配置项
 | 配置项 | 必填 | 默认值 | 说明 |

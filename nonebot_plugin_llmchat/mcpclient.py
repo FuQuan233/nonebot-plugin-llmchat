@@ -7,6 +7,7 @@ from mcp.client.stdio import stdio_client
 from nonebot import logger
 
 from .config import MCPServerConfig
+from .onebottools import OneBotTools
 
 
 class MCPClient:
@@ -32,6 +33,8 @@ class MCPClient:
         # 添加工具列表缓存
         self._tools_cache: list | None = None
         self._cache_initialized = False
+        # 初始化OneBot工具
+        self.onebot_tools = OneBotTools()
         self._initialized = True
         logger.debug("MCPClient单例初始化成功")
 
@@ -112,6 +115,12 @@ class MCPClient:
         logger.info(f"初始化工具列表缓存，需要连接{len(self.server_config)}个服务器")
         available_tools = []
 
+        # 添加OneBot内置工具
+        onebot_tools = self.onebot_tools.get_available_tools()
+        available_tools.extend(onebot_tools)
+        logger.debug(f"添加了{len(onebot_tools)}个OneBot内置工具")
+
+        # 添加MCP服务器工具
         for server_name in self.server_config.keys():
             logger.debug(f"正在从服务器[{server_name}]获取工具列表")
             async with self._create_session_context(server_name) as session:
@@ -137,8 +146,16 @@ class MCPClient:
         logger.info(f"工具列表缓存完成，共缓存{len(available_tools)}个工具")
         return available_tools
 
-    async def call_tool(self, tool_name: str, tool_args: dict):
+    async def call_tool(self, tool_name: str, tool_args: dict, group_id: int | None = None, bot_id: str | None = None):
         """按需连接调用工具，调用后立即断开"""
+        # 检查是否是QQ工具
+        if tool_name.startswith("ob__"):
+            if group_id is None or bot_id is None:
+                return "QQ工具需要提供group_id和bot_id参数"
+            logger.info(f"调用OneBot工具[{tool_name}]")
+            return await self.onebot_tools.call_tool(tool_name, tool_args, group_id, bot_id)
+
+        # MCP工具处理
         server_name, real_tool_name = tool_name.split("___")
         logger.info(f"按需连接到服务器[{server_name}]调用工具[{real_tool_name}]")
 
@@ -153,6 +170,11 @@ class MCPClient:
 
     def get_friendly_name(self, tool_name: str):
         logger.debug(tool_name)
+        # 检查是否是OneBot工具
+        if tool_name.startswith("ob__"):
+            return self.onebot_tools.get_friendly_name(tool_name)
+        
+        # MCP工具处理
         server_name, real_tool_name = tool_name.split("___")
         return (self.server_config[server_name].friendly_name or server_name) + " - " + real_tool_name
 
