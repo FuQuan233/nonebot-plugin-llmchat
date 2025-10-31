@@ -173,7 +173,7 @@ class MCPClient:
         # 检查是否是OneBot工具
         if tool_name.startswith("ob__"):
             return self.onebot_tools.get_friendly_name(tool_name)
-        
+
         # MCP工具处理
         server_name, real_tool_name = tool_name.split("___")
         return (self.server_config[server_name].friendly_name or server_name) + " - " + real_tool_name
