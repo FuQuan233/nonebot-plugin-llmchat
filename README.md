@@ -205,7 +205,7 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
             "command": "npx",
             "args": ["-y", "@modelcontextprotocol/server-brave-search"],
             "env": {
-            "BRAVE_API_KEY": "<your-api-key>"
+                "BRAVE_API_KEY": "<your-api-key>"
             }
         },
         "fetch": {
@@ -224,10 +224,10 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
             "additional_prompt": "在使用的时候你需要将你需要的结果输出出来，用户看不到你的代码，如果你需要给用户展示，你需要将代码以文字的形式发送出来。",
             "command": "docker",
             "args": [
-            "run",
-            "--rm",
-            "-i",
-            "formulahendry/mcp-server-code-runner"
+                "run",
+                "--rm",
+                "-i",
+                "formulahendry/mcp-server-code-runner"
             ]
         },
     }
