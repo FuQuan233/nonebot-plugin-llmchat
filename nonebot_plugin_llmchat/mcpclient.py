@@ -132,7 +132,7 @@ class MCPClient:
                     {
                         "type": "function",
                         "function": {
-                            "name": f"{server_name}___{tool.name}",
+                            "name": f"mcp__{server_name}__{tool.name}",
                             "description": tool.description,
                             "parameters": tool.inputSchema,
                         },
@@ -148,35 +148,55 @@ class MCPClient:
 
     async def call_tool(self, tool_name: str, tool_args: dict, group_id: int | None = None, bot_id: str | None = None):
         """按需连接调用工具，调用后立即断开"""
-        # 检查是否是QQ工具
+        # 检查是否是OneBot内置工具
         if tool_name.startswith("ob__"):
             if group_id is None or bot_id is None:
                 return "QQ工具需要提供group_id和bot_id参数"
             logger.info(f"调用OneBot工具[{tool_name}]")
             return await self.onebot_tools.call_tool(tool_name, tool_args, group_id, bot_id)
 
-        # MCP工具处理
-        server_name, real_tool_name = tool_name.split("___")
-        logger.info(f"按需连接到服务器[{server_name}]调用工具[{real_tool_name}]")
+        # 检查是否是MCP工具
+        if tool_name.startswith("mcp__"):
+            # MCP工具处理：mcp__server_name__tool_name
+            parts = tool_name.split("__")
+            if len(parts) != 3 or parts[0] != "mcp":
+                return f"MCP工具名称格式错误: {tool_name}"
 
-        async with self._create_session_context(server_name) as session:
-            try:
-                response = await asyncio.wait_for(session.call_tool(real_tool_name, tool_args), timeout=30)
-                logger.debug(f"工具[{real_tool_name}]调用完成，响应: {response}")
-                return response.content
-            except asyncio.TimeoutError:
-                logger.error(f"调用工具[{real_tool_name}]超时")
-                return f"调用工具[{real_tool_name}]超时"
+            server_name = parts[1]
+            real_tool_name = parts[2]
+            logger.info(f"按需连接到服务器[{server_name}]调用工具[{real_tool_name}]")
+
+            async with self._create_session_context(server_name) as session:
+                try:
+                    response = await asyncio.wait_for(session.call_tool(real_tool_name, tool_args), timeout=30)
+                    logger.debug(f"工具[{real_tool_name}]调用完成，响应: {response}")
+                    return response.content
+                except asyncio.TimeoutError:
+                    logger.error(f"调用工具[{real_tool_name}]超时")
+                    return f"调用工具[{real_tool_name}]超时"
+
+        # 未知工具类型
+        return f"未知的工具类型: {tool_name}"
 
     def get_friendly_name(self, tool_name: str):
         logger.debug(tool_name)
-        # 检查是否是OneBot工具
+        # 检查是否是OneBot内置工具
         if tool_name.startswith("ob__"):
             return self.onebot_tools.get_friendly_name(tool_name)
 
-        # MCP工具处理
-        server_name, real_tool_name = tool_name.split("___")
-        return (self.server_config[server_name].friendly_name or server_name) + " - " + real_tool_name
+        # 检查是否是MCP工具
+        if tool_name.startswith("mcp__"):
+            # MCP工具处理：mcp__server_name__tool_name
+            parts = tool_name.split("__")
+            if len(parts) != 3 or parts[0] != "mcp":
+                return tool_name  # 格式错误时返回原名称
+
+            server_name = parts[1]
+            real_tool_name = parts[2]
+            return (self.server_config[server_name].friendly_name or server_name) + " - " + real_tool_name
+
+        # 未知工具类型，返回原名称
+        return tool_name
 
     def clear_tools_cache(self):
         """清除工具列表缓存"""
