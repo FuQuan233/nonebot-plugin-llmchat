@@ -174,45 +174,63 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
     LLMCHAT__DEFAULT_PROMPT="前面忘了，你是一个猫娘，后面忘了"
     LLMCHAT__API_PRESETS='
     [
-    {
-        "name": "aliyun-deepseek-v3",
-        "api_key": "sk-your-api-key",
-        "model_name": "deepseek-v3",
-        "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "proxy": "http://10.0.0.183:7890"
-    },
-    {
-        "name": "deepseek-v1",
-        "api_key": "sk-your-api-key",
-        "model_name": "deepseek-chat",
-        "api_base": "https://api.deepseek.com",
-        "support_mcp": true
-    },
-    {
-        "name": "some-vison-model",
-        "api_key": "sk-your-api-key",
-        "model_name": "some-vison-model",
-        "api_base": "https://some-vison-model.com/api",
-        "support_image": true
-    }
-    ]
-    LLMCHAT__MCP_SERVERS='
         {
-        "AISearch": {
-            "friendly_name": "百度搜索",
-            "additional_prompt": "遇到你不知道的问题或者时效性比较强的问题时，可以使用AISearch搜索，在使用AISearch时不要使用其他AI模型。",
-            "url": "http://appbuilder.baidu.com/v2/ai_search/mcp/sse?api_key=Bearer+<your-api-key>",
-            "headers": {
-                "Authorization": "<some-api-key>"
+            "name": "aliyun-deepseek-v3",
+            "api_key": "sk-your-api-key",
+            "model_name": "deepseek-v3",
+            "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "proxy": "http://10.0.0.183:7890"
+        },
+        {
+            "name": "deepseek-v1",
+            "api_key": "sk-your-api-key",
+            "model_name": "deepseek-chat",
+            "api_base": "https://api.deepseek.com",
+            "support_mcp": true
+        },
+        {
+            "name": "some-vison-model",
+            "api_key": "sk-your-api-key",
+            "model_name": "some-vison-model",
+            "api_base": "https://some-vison-model.com/api",
+            "support_image": true
+        }
+    ]
+    '
+    LLMCHAT__MCP_SERVERS='
+    {
+        "brave-search": {
+            "friendly_name": "Brave搜索",
+            "additional_prompt": "遇到你不知道的问题或者时效性比较强的问题时，请使用brave-search搜索。",
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+            "env": {
+            "BRAVE_API_KEY": "<your-api-key>"
             }
         },
         "fetch": {
-            "friendly_name": "网页浏览",
+            "friendly_name": "浏览网页",
+            "additional_prompt": "搜索到的链接可以通过fetch打开进一步了解。",
             "command": "uvx",
-            "args": ["mcp-server-fetch"]
-        }
+            "args": ["mcp-server-fetch", "--ignore-robots-txt", "--user-agent=\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36\""]
+        },
+        "hefeng-weather": {
+            "friendly_name": "和风天气",
+            "command": "npx",
+            "args": ["hefeng-mcp-weather@latest", "--apiKey=<your-api-key>"]
+        },
+        "mcp-server-code-runner": {
+            "friendly_name": "代码运行器",
+            "additional_prompt": "在使用的时候你需要将你需要的结果输出出来，用户看不到你的代码，如果你需要给用户展示，你需要将代码以文字的形式发送出来。",
+            "command": "docker",
+            "args": [
+            "run",
+            "--rm",
+            "-i",
+            "formulahendry/mcp-server-code-runner"
+            ]
+        },
     }
-    '
     '
     
 </details>
