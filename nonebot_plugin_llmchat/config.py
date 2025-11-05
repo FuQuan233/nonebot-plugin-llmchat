@@ -49,6 +49,8 @@ class ScopedConfig(BaseModel):
         default_factory=list,
         description="需要忽略的消息前缀列表，匹配到这些前缀的消息不会处理"
     )
+    enable_private_chat: bool = Field(False, description="是否启用私聊功能")
+    private_chat_preset: str = Field("off", description="私聊默认使用的预设名称")
 
 
 class Config(BaseModel):
