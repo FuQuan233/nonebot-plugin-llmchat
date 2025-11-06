@@ -453,7 +453,7 @@ async def process_messages(context_id: int, is_group: bool = True):
             message = response.choices[0].message
 
             # 处理响应并处理工具调用
-            while preset.support_mcp and message.tool_calls:
+            while preset.support_mcp and message and message.tool_calls:
                 new_messages.append({
                     "role": "assistant",
                     "tool_calls": [tool_call.model_dump() for tool_call in message.tool_calls]
@@ -505,11 +505,17 @@ async def process_messages(context_id: int, is_group: bool = True):
 
                 message = response.choices[0].message
 
+            # 安全检查：确保 message 不为 None
+            if not message:
+                logger.error("API 响应中的 message 为 None")
+                await handler.send(Message("服务暂时不可用，请稍后再试"))
+                return
+
             reply, matched_reasoning_content = pop_reasoning_content(
-                response.choices[0].message.content
+                message.content
             )
             reasoning_content: str | None = (
-                getattr(response.choices[0].message, "reasoning_content", None)
+                getattr(message, "reasoning_content", None)
                 or matched_reasoning_content
             )
 
@@ -518,7 +524,7 @@ async def process_messages(context_id: int, is_group: bool = True):
                 "content": reply,
             }
 
-            reply_images = getattr(response.choices[0].message, "images", None)
+            reply_images = getattr(message, "images", None)
 
             if reply_images:
                 # openai的sdk里的assistant消息暂时没有images字段，需要单独处理
