@@ -115,7 +115,7 @@ def get_preset(context_id: int, is_group: bool = True) -> PresetConfig:
         state = group_states[context_id]
     else:
         state = private_chat_states[context_id]
-    
+
     for preset in plugin_config.api_presets:
         if preset.name == state.preset_name:
             return preset
@@ -216,14 +216,14 @@ async def is_triggered(event: GroupMessageEvent | PrivateMessageEvent) -> bool:
             return True
 
         return False
-    
+
     elif isinstance(event, PrivateMessageEvent):
         # 检查私聊功能是否启用
         if not plugin_config.enable_private_chat:
             return False
-        
+
         state = private_chat_states[event.user_id]
-        
+
         if state.preset_name == "off":
             return False
 
@@ -238,7 +238,7 @@ async def is_triggered(event: GroupMessageEvent | PrivateMessageEvent) -> bool:
                 return False
 
         state.past_events.append(event)
-        
+
         # 私聊默认触发
         return True
 
@@ -327,7 +327,7 @@ async def process_messages(context_id: int, is_group: bool = True):
         user_id = context_id
         state = private_chat_states[user_id]
         group_id = None
-    
+
     preset = get_preset(context_id, is_group)
 
     # 初始化OpenAI客户端
@@ -345,8 +345,10 @@ async def process_messages(context_id: int, is_group: bool = True):
             timeout=plugin_config.request_timeout,
         )
 
+    chat_type = "群聊" if is_group else "私聊"
+    context_type = "群号" if is_group else "用户"
     logger.info(
-        f"开始处理{'群聊' if is_group else '私聊'}消息 {'群号' if is_group else '用户'}：{context_id} 当前队列长度：{state.queue.qsize()}"
+        f"开始处理{chat_type}消息 {context_type}：{context_id} 当前队列长度：{state.queue.qsize()}"
     )
     while not state.queue.empty():
         event = await state.queue.get()
@@ -373,8 +375,10 @@ async def process_messages(context_id: int, is_group: bool = True):
                 "- 不要使用markdown或者html，聊天软件不支持解析，换行请用换行符。",
                 "- 你应该以普通人的方式发送消息，每条消息字数要尽量少一些，应该倾向于使用更多条的消息回复。",
                 "- 代码则不需要分段，用单独的一条消息发送。",
-                "- 请使用发送者的昵称称呼发送者，你可以礼貌地问候发送者，但只需要在第一次回答这位发送者的问题时问候他。",
-                "- 你有at群成员的能力，只需要在某条消息中插入[CQ:at,qq=（QQ号）]，也就是CQ码。at发送者是非必要的，你可以根据你自己的想法at某个人。",
+                "- 请使用发送者的昵称称呼发送者，你可以礼貌地问候发送者，但只需要在"
+                "第一次回答这位发送者的问题时问候他。",
+                "- 你有at群成员的能力，只需要在某条消息中插入[CQ:at,qq=（QQ号）]，"
+                "也就是CQ码。at发送者是非必要的，你可以根据你自己的想法at某个人。",
                 "- 你有引用某条消息的能力，使用[CQ:reply,id=（消息id）]来引用。",
                 "- 如果有多条消息，你应该优先回复提到你的，一段时间之前的就不要回复了，也可以直接选择不回复。",
                 "- 如果你选择完全不回复，你只需要直接输出一个<botbr>。",
@@ -677,7 +681,7 @@ private_preset_handler = on_command(
 async def handle_private_preset(event: PrivateMessageEvent, args: Message = CommandArg()):
     if not plugin_config.enable_private_chat:
         await private_preset_handler.finish("私聊功能未启用")
-    
+
     user_id = event.user_id
     preset_name = args.extract_plain_text().strip()
 
@@ -709,7 +713,7 @@ private_edit_preset_handler = on_command(
 async def handle_private_edit_preset(event: PrivateMessageEvent, args: Message = CommandArg()):
     if not plugin_config.enable_private_chat:
         await private_edit_preset_handler.finish("私聊功能未启用")
-    
+
     user_id = event.user_id
     user_prompt = args.extract_plain_text().strip()
 
@@ -730,7 +734,7 @@ private_reset_handler = on_command(
 async def handle_private_reset(event: PrivateMessageEvent, args: Message = CommandArg()):
     if not plugin_config.enable_private_chat:
         await private_reset_handler.finish("私聊功能未启用")
-    
+
     user_id = event.user_id
 
     private_chat_states[user_id].past_events.clear()
@@ -751,7 +755,7 @@ private_think_handler = on_command(
 async def handle_private_think(event: PrivateMessageEvent, args: Message = CommandArg()):
     if not plugin_config.enable_private_chat:
         await private_think_handler.finish("私聊功能未启用")
-    
+
     state = private_chat_states[event.user_id]
     state.output_reasoning_content = not state.output_reasoning_content
 
@@ -789,7 +793,7 @@ async def save_state():
     os.makedirs(os.path.dirname(data_file), exist_ok=True)
     async with aiofiles.open(data_file, "w", encoding="utf8") as f:
         await f.write(json.dumps(data, ensure_ascii=False))
-    
+
     # 保存私聊状态
     if plugin_config.enable_private_chat:
         logger.info(f"开始保存私聊状态到文件：{private_data_file}")
@@ -803,7 +807,7 @@ async def save_state():
             }
             for uid, state in private_chat_states.items()
         }
-        
+
         os.makedirs(os.path.dirname(private_data_file), exist_ok=True)
         async with aiofiles.open(private_data_file, "w", encoding="utf8") as f:
             await f.write(json.dumps(private_data, ensure_ascii=False))
@@ -828,7 +832,7 @@ async def load_state():
             state.output_reasoning_content = state_data["output_reasoning_content"]
             state.random_trigger_prob = state_data.get("random_trigger_prob", plugin_config.random_trigger_prob)
             group_states[int(gid)] = state
-    
+
     # 加载私聊状态
     if plugin_config.enable_private_chat:
         logger.info(f"从文件加载私聊状态：{private_data_file}")
