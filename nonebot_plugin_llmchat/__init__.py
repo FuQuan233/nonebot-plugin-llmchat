@@ -8,7 +8,7 @@ import random
 import re
 import ssl
 import time
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 import aiofiles
 import httpx
@@ -123,7 +123,7 @@ def get_preset(context_id: int, is_group: bool = True) -> PresetConfig:
 
 
 # 消息格式转换
-def format_message(event: Union[GroupMessageEvent, PrivateMessageEvent]) -> str:
+def format_message(event: GroupMessageEvent | PrivateMessageEvent) -> str:
     text_message = ""
     if isinstance(event, GroupMessageEvent) and event.reply is not None:
         text_message += f"[回复 {event.reply.sender.nickname} 的消息 {event.reply.message.extract_plain_text()}]\n"
@@ -186,7 +186,7 @@ def build_reasoning_forward_nodes(self_id: str, reasoning_content: str):
     return nodes
 
 
-async def is_triggered(event: Union[GroupMessageEvent, PrivateMessageEvent]) -> bool:
+async def is_triggered(event: GroupMessageEvent | PrivateMessageEvent) -> bool:
     """扩展后的消息处理规则"""
 
     if isinstance(event, GroupMessageEvent):
@@ -254,7 +254,7 @@ handler = on_message(
 
 
 @handler.handle()
-async def handle_message(event: Union[GroupMessageEvent, PrivateMessageEvent]):
+async def handle_message(event: GroupMessageEvent | PrivateMessageEvent):
     if isinstance(event, GroupMessageEvent):
         group_id = event.group_id
         logger.debug(
@@ -359,23 +359,31 @@ async def process_messages(context_id: int, is_group: bool = True):
         past_events_snapshot = []
         mcp_client = MCPClient.get_instance(plugin_config.mcp_servers)
         try:
-            systemPrompt = f"""
-我想要你帮我在{"群聊" if is_group else "私聊"}中闲聊，大家一般叫你{"、".join(list(driver.config.nickname))}，我将会在后面的信息中告诉你每条{"群聊" if is_group else "私聊"}信息的发送者和发送时间，你可以直接称呼发送者为他对应的昵称。
-你的回复需要遵守以下几点规则：
-- 你可以使用多条消息回复，每两条消息之间使用<botbr>分隔，<botbr>前后不需要包含额外的换行和空格。
-- 除<botbr>外，消息中不应该包含其他类似的标记。
-- 不要使用markdown或者html，聊天软件不支持解析，换行请用换行符。
-- 你应该以普通人的方式发送消息，每条消息字数要尽量少一些，应该倾向于使用更多条的消息回复。
-- 代码则不需要分段，用单独的一条消息发送。
-- 请使用发送者的昵称称呼发送者，你可以礼貌地问候发送者，但只需要在第一次回答这位发送者的问题时问候他。
-- 你有at群成员的能力，只需要在某条消息中插入[CQ:at,qq=（QQ号）]，也就是CQ码。at发送者是非必要的，你可以根据你自己的想法at某个人。
-- 你有引用某条消息的能力，使用[CQ:reply,id=（消息id）]来引用。
-- 如果有多条消息，你应该优先回复提到你的，一段时间之前的就不要回复了，也可以直接选择不回复。
-- 如果你选择完全不回复，你只需要直接输出一个<botbr>。
-- 如果你需要思考的话，你应该思考尽量少，以节省时间。
-下面是关于你性格的设定，如果设定中提到让你扮演某个人，或者设定中有提到名字，则优先使用设定中的名字。
-{(state.group_prompt if is_group else state.user_prompt) or plugin_config.default_prompt}
-"""
+            # 构建系统提示，分成多行以满足行长限制
+            chat_type = "群聊" if is_group else "私聊"
+            bot_names = "、".join(list(driver.config.nickname))
+            default_prompt = (state.group_prompt if is_group else state.user_prompt) or plugin_config.default_prompt
+
+            system_lines = [
+                f"我想要你帮我在{chat_type}中闲聊，大家一般叫你{bot_names}。",
+                "我将会在后面的信息中告诉你每条信息的发送者和发送时间，你可以直接称呼发送者为他对应的昵称。",
+                "你的回复需要遵守以下几点规则：",
+                "- 你可以使用多条消息回复，每两条消息之间使用<botbr>分隔，<botbr>前后不需要包含额外的换行和空格。",
+                "- 除<botbr>外，消息中不应该包含其他类似的标记。",
+                "- 不要使用markdown或者html，聊天软件不支持解析，换行请用换行符。",
+                "- 你应该以普通人的方式发送消息，每条消息字数要尽量少一些，应该倾向于使用更多条的消息回复。",
+                "- 代码则不需要分段，用单独的一条消息发送。",
+                "- 请使用发送者的昵称称呼发送者，你可以礼貌地问候发送者，但只需要在第一次回答这位发送者的问题时问候他。",
+                "- 你有at群成员的能力，只需要在某条消息中插入[CQ:at,qq=（QQ号）]，也就是CQ码。at发送者是非必要的，你可以根据你自己的想法at某个人。",
+                "- 你有引用某条消息的能力，使用[CQ:reply,id=（消息id）]来引用。",
+                "- 如果有多条消息，你应该优先回复提到你的，一段时间之前的就不要回复了，也可以直接选择不回复。",
+                "- 如果你选择完全不回复，你只需要直接输出一个<botbr>。",
+                "- 如果你需要思考的话，你应该尽量少思考，以节省时间。",
+                "下面是关于你性格的设定，如果设定中提到让你扮演某个人，或者设定中有提到名字，则优先使用设定中的名字。",
+                default_prompt,
+            ]
+
+            systemPrompt = "\n".join(system_lines)
             if preset.support_mcp:
                 systemPrompt += "你也可以使用一些工具，下面是关于这些工具的额外说明：\n"
                 for mcp_name, mcp_config in plugin_config.mcp_servers.items():
