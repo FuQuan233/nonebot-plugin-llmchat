@@ -22,7 +22,7 @@ from nonebot import (
     require,
 )
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message, MessageSegment, PrivateMessageEvent
-from nonebot.adapters.onebot.v11.permission import GROUP_ADMIN, GROUP_OWNER
+from nonebot.adapters.onebot.v11.permission import GROUP_ADMIN, GROUP_OWNER, PRIVATE
 from nonebot.params import CommandArg
 from nonebot.permission import SUPERUSER
 from nonebot.plugin import PluginMetadata
@@ -382,13 +382,21 @@ async def process_messages(context_id: int, is_group: bool = True):
                 "- 不要使用markdown或者html，聊天软件不支持解析，换行请用换行符。",
                 "- 你应该以普通人的方式发送消息，每条消息字数要尽量少一些，但是不建议超过两条。",
                 "- 代码则不需要分段，用单独的一条消息发送。",
-                "- 请使用发送者的昵称称呼发送者，你可以礼貌地问候发送者，但只需要在第一次回答这位发送者的问题时问候他。",
-                "- 你有at群成员的能力，只需要在某条消息中插入[CQ:at,qq=（QQ号）]，"
-                "也就是CQ码。at发送者是非必要的，如果不是必要，请不要at别人。",
+                "- 请使用发送者的昵称称呼发送者，你可以礼貌地问候发送者，但只需要在"
+                "第一次回答这位发送者的问题时问候他。",
                 "- 你有引用某条消息的能力，使用[CQ:reply,id=（消息id）]来引用。",
                 "- 如果有多条消息，你应该优先回复提到你的，一段时间之前的就不要回复了，也可以直接选择不回复。",
                 "- 如果你选择完全不回复，你只需要直接输出一个<botbr>。",
                 "- 如果你需要思考的话，你应该尽量少思考，以节省时间。",
+            ]
+
+            if is_group:
+                system_lines += [
+                    "- 你有at群成员的能力，只需要在某条消息中插入[CQ:at,qq=（QQ号）]，"
+                    "也就是CQ码。at发送者是非必要的，你可以根据你自己的想法at某个人。",
+                ]
+
+            system_lines += [
                 "下面是关于你性格的设定，如果设定中提到让你扮演某个人，或者设定中有提到名字，则优先使用设定中的名字。",
                 default_prompt,
             ]
@@ -445,7 +453,7 @@ async def process_messages(context_id: int, is_group: bool = True):
             }
 
             if preset.support_mcp:
-                available_tools = await mcp_client.get_available_tools()
+                available_tools = await mcp_client.get_available_tools(is_group)
                 client_config["tools"] = available_tools
 
             response = await client.chat.completions.create(
@@ -477,27 +485,12 @@ async def process_messages(context_id: int, is_group: bool = True):
                     # 发送工具调用提示
                     await handler.send(Message(f"正在使用{mcp_client.get_friendly_name(tool_name)}"))
 
-                    # 执行工具调用，传递群组和机器人信息用于QQ工具
-                    if is_group:
-                        result = await mcp_client.call_tool(
-                            tool_name,
-                            tool_args,
-                            group_id=event.group_id,
-                            bot_id=str(event.self_id),
-                            user_id=event.user_id
-                        )
-                    else:
-                        # 私聊时某些工具不可用（如群操作工具），跳过这些工具
-                        if tool_name.startswith("ob__"):
-                            result = f"私聊不支持{mcp_client.get_friendly_name(tool_name)}工具"
-                        else:
-                            result = await mcp_client.call_tool(
-                                tool_name,
-                                tool_args,
-                                group_id=None,
-                                bot_id=str(event.self_id),
-                                user_id=event.user_id
-                            )
+                    result = await mcp_client.call_tool(
+                        tool_name,
+                        tool_args,
+                        group_id=event.group_id,
+                        bot_id=str(event.self_id)
+                    )
 
                     new_messages.append({
                         "role": "tool",
@@ -584,22 +577,33 @@ preset_handler = on_command("API预设", priority=1, block=True, permission=SUPE
 
 
 @preset_handler.handle()
-async def handle_preset(event: GroupMessageEvent, args: Message = CommandArg()):
-    group_id = event.group_id
+async def handle_preset(event: GroupMessageEvent | PrivateMessageEvent, args: Message = CommandArg()):
+    if isinstance(event, GroupMessageEvent):
+        context_id = event.group_id
+        state = group_states[context_id]
+    else:  # PrivateMessageEvent
+        if not plugin_config.enable_private_chat:
+            return
+        context_id = event.user_id
+        state = private_chat_states[context_id]
+    
     preset_name = args.extract_plain_text().strip()
 
     if preset_name == "off":
-        group_states[group_id].preset_name = preset_name
-        await preset_handler.finish("已关闭llmchat")
+        state.preset_name = preset_name
+        if isinstance(event, GroupMessageEvent):
+            await preset_handler.finish("已关闭llmchat群聊功能")
+        else:
+            await preset_handler.finish("已关闭llmchat私聊功能")
 
     available_presets = {p.name for p in plugin_config.api_presets}
     if preset_name not in available_presets:
         available_presets_str = "\n- ".join(available_presets)
         await preset_handler.finish(
-            f"当前API预设：{group_states[group_id].preset_name}\n可用API预设：\n- {available_presets_str}"
+            f"当前API预设：{state.preset_name}\n可用API预设：\n- {available_presets_str}"
         )
 
-    group_states[group_id].preset_name = preset_name
+    state.preset_name = preset_name
     await preset_handler.finish(f"已切换至API预设：{preset_name}")
 
 
@@ -607,16 +611,23 @@ edit_preset_handler = on_command(
     "修改设定",
     priority=1,
     block=True,
-    permission=(SUPERUSER | GROUP_ADMIN | GROUP_OWNER),
+    permission=(SUPERUSER | GROUP_ADMIN | GROUP_OWNER | PRIVATE),
 )
 
 
 @edit_preset_handler.handle()
-async def handle_edit_preset(event: GroupMessageEvent, args: Message = CommandArg()):
-    group_id = event.group_id
-    group_prompt = args.extract_plain_text().strip()
+async def handle_edit_preset(event: GroupMessageEvent | PrivateMessageEvent, args: Message = CommandArg()):
+    if isinstance(event, GroupMessageEvent):
+        context_id = event.group_id
+        state = group_states[context_id]
+    else:  # PrivateMessageEvent
+        if not plugin_config.enable_private_chat:
+            return
+        context_id = event.user_id
+        state = private_chat_states[context_id]
 
-    group_states[group_id].group_prompt = group_prompt
+    group_prompt = args.extract_plain_text().strip()
+    state.group_prompt = group_prompt
     await edit_preset_handler.finish("修改成功")
 
 
@@ -624,21 +635,23 @@ reset_handler = on_command(
     "记忆清除",
     priority=1,
     block=True,
-    permission=(SUPERUSER | GROUP_ADMIN | GROUP_OWNER),
+    permission=(SUPERUSER | GROUP_ADMIN | GROUP_OWNER | PRIVATE),
 )
 
 
 @reset_handler.handle()
-async def handle_reset(event: GroupMessageEvent, args: Message = CommandArg()):
-    group_id = event.group_id
+async def handle_reset(event: GroupMessageEvent | PrivateMessageEvent, args: Message = CommandArg()):
+    if isinstance(event, GroupMessageEvent):
+        context_id = event.group_id
+        state = group_states[context_id]
+    else:  # PrivateMessageEvent
+        if not plugin_config.enable_private_chat:
+            return
+        context_id = event.user_id
+        state = private_chat_states[context_id]
 
-    # 清空内存状态
-    group_states[group_id].past_events.clear()
-    group_states[group_id].history.clear()
-    
-    # 清空数据库记录
-    await DatabaseManager.clear_group_history(group_id)
-    
+    state.past_events.clear()
+    state.history.clear()
     await reset_handler.finish("记忆已清空")
 
 
@@ -652,142 +665,43 @@ set_prob_handler = on_command(
 
 @set_prob_handler.handle()
 async def handle_set_prob(event: GroupMessageEvent, args: Message = CommandArg()):
-    group_id = event.group_id
-    prob = 0
+    context_id = event.group_id
+    state = group_states[context_id]
 
     try:
         prob = float(args.extract_plain_text().strip())
         if prob < 0 or prob > 1:
-            raise ValueError
-    except Exception as e:
-        await reset_handler.finish(f"输入有误，请使用 [0,1] 的浮点数\n{e!s}")
+            raise ValueError("概率值必须在0-1之间")
+    except ValueError as e:
+        await set_prob_handler.finish(f"输入有误，请使用 [0,1] 的浮点数\n{e!s}")
 
-    group_states[group_id].random_trigger_prob = prob
-    await reset_handler.finish(f"主动回复概率已设为 {prob}")
+    state.random_trigger_prob = prob
+    await set_prob_handler.finish(f"主动回复概率已设为 {prob}")
 
 
-# 预设切换命令
+# 思维输出切换命令
 think_handler = on_command(
     "切换思维输出",
     priority=1,
     block=True,
-    permission=(SUPERUSER | GROUP_ADMIN | GROUP_OWNER),
+    permission=(SUPERUSER | GROUP_ADMIN | GROUP_OWNER | PRIVATE),
 )
 
 
 @think_handler.handle()
-async def handle_think(event: GroupMessageEvent, args: Message = CommandArg()):
-    state = group_states[event.group_id]
+async def handle_think(event: GroupMessageEvent | PrivateMessageEvent, args: Message = CommandArg()):
+    if isinstance(event, GroupMessageEvent):
+        state = group_states[event.group_id]
+    else:  # PrivateMessageEvent
+        if not plugin_config.enable_private_chat:
+            return
+        state = private_chat_states[event.user_id]
+
     state.output_reasoning_content = not state.output_reasoning_content
 
     await think_handler.finish(
         f"已{(state.output_reasoning_content and '开启') or '关闭'}思维输出"
     )
-
-
-# region 私聊相关指令
-
-# 私聊预设切换命令
-private_preset_handler = on_command(
-    "私聊API预设",
-    priority=1,
-    block=True,
-    permission=SUPERUSER,
-)
-
-
-@private_preset_handler.handle()
-async def handle_private_preset(event: PrivateMessageEvent, args: Message = CommandArg()):
-    if not plugin_config.enable_private_chat:
-        await private_preset_handler.finish("私聊功能未启用")
-
-    user_id = event.user_id
-    preset_name = args.extract_plain_text().strip()
-
-    if preset_name == "off":
-        private_chat_states[user_id].preset_name = preset_name
-        await private_preset_handler.finish("已关闭llmchat私聊功能")
-
-    available_presets = {p.name for p in plugin_config.api_presets}
-    if preset_name not in available_presets:
-        available_presets_str = "\n- ".join(available_presets)
-        await private_preset_handler.finish(
-            f"当前API预设：{private_chat_states[user_id].preset_name}\n可用API预设：\n- {available_presets_str}"
-        )
-
-    private_chat_states[user_id].preset_name = preset_name
-    await private_preset_handler.finish(f"已切换至API预设：{preset_name}")
-
-
-# 私聊设定修改命令
-private_edit_preset_handler = on_command(
-    "私聊修改设定",
-    priority=1,
-    block=True,
-    permission=SUPERUSER,
-)
-
-
-@private_edit_preset_handler.handle()
-async def handle_private_edit_preset(event: PrivateMessageEvent, args: Message = CommandArg()):
-    if not plugin_config.enable_private_chat:
-        await private_edit_preset_handler.finish("私聊功能未启用")
-
-    user_id = event.user_id
-    user_prompt = args.extract_plain_text().strip()
-
-    private_chat_states[user_id].group_prompt = user_prompt
-    await private_edit_preset_handler.finish("修改成功")
-
-
-# 私聊记忆清除命令
-private_reset_handler = on_command(
-    "私聊记忆清除",
-    priority=1,
-    block=True,
-    permission=SUPERUSER,
-)
-
-
-@private_reset_handler.handle()
-async def handle_private_reset(event: PrivateMessageEvent, args: Message = CommandArg()):
-    if not plugin_config.enable_private_chat:
-        await private_reset_handler.finish("私聊功能未启用")
-
-    user_id = event.user_id
-
-    # 清空内存状态
-    private_chat_states[user_id].past_events.clear()
-    private_chat_states[user_id].history.clear()
-    
-    # 清空数据库记录
-    await DatabaseManager.clear_private_history(user_id)
-    
-    await private_reset_handler.finish("记忆已清空")
-
-
-# 私聊思维输出切换命令
-private_think_handler = on_command(
-    "私聊切换思维输出",
-    priority=1,
-    block=True,
-    permission=SUPERUSER,
-)
-
-
-@private_think_handler.handle()
-async def handle_private_think(event: PrivateMessageEvent, args: Message = CommandArg()):
-    if not plugin_config.enable_private_chat:
-        await private_think_handler.finish("私聊功能未启用")
-
-    state = private_chat_states[event.user_id]
-    state.output_reasoning_content = not state.output_reasoning_content
-
-    await private_think_handler.finish(
-        f"已{(state.output_reasoning_content and '开启') or '关闭'}思维输出"
-    )
-
-# endregion
 
 
 # region 持久化与定时任务
