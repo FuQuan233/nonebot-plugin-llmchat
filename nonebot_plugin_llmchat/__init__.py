@@ -570,6 +570,28 @@ async def process_messages(context_id: int, is_group: bool = True):
         finally:
             state.processing = False
             state.queue.task_done()
+            
+            # 实时保存状态到数据库
+            try:
+                if is_group:
+                    await DatabaseManager.save_group_state(
+                        group_id=context_id,
+                        preset_name=state.preset_name,
+                        history=state.history,
+                        group_prompt=state.group_prompt,
+                        output_reasoning_content=state.output_reasoning_content,
+                        random_trigger_prob=state.random_trigger_prob,
+                    )
+                else:
+                    await DatabaseManager.save_private_state(
+                        user_id=context_id,
+                        preset_name=state.preset_name,
+                        history=state.history,
+                        user_prompt=state.group_prompt,
+                        output_reasoning_content=state.output_reasoning_content,
+                    )
+            except Exception as e:
+                logger.error(f"实时保存状态失败 {'群号' if is_group else '用户'}：{context_id}, 错误：{e}")
             # 不再需要每次都清理MCPClient，因为它现在是单例
             # await mcp_client.cleanup()
 
@@ -779,9 +801,9 @@ async def load_state():
 async def init_plugin():
     logger.info("插件启动初始化")
     await load_state()
-    # 每5分钟保存状态
-    scheduler.add_job(save_state, "interval", minutes=5)
-    logger.info("插件初始化完成")
+    # 每30分钟保存一次状态作为备份（已开启实时保存）
+    scheduler.add_job(save_state, "interval", minutes=30)
+    logger.info("插件初始化完成（已启用实时保存功能）")
 
 
 @driver.on_shutdown
