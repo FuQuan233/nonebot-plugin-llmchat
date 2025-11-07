@@ -586,7 +586,7 @@ async def handle_preset(event: GroupMessageEvent | PrivateMessageEvent, args: Me
             return
         context_id = event.user_id
         state = private_chat_states[context_id]
-    
+
     preset_name = args.extract_plain_text().strip()
 
     if preset_name == "off":
@@ -674,6 +674,7 @@ async def handle_set_prob(event: GroupMessageEvent, args: Message = CommandArg()
             raise ValueError("概率值必须在0-1之间")
     except ValueError as e:
         await set_prob_handler.finish(f"输入有误，请使用 [0,1] 的浮点数\n{e!s}")
+        return
 
     state.random_trigger_prob = prob
     await set_prob_handler.finish(f"主动回复概率已设为 {prob}")
