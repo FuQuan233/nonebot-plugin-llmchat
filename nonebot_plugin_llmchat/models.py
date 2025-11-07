@@ -3,11 +3,13 @@ Tortoise ORM 模型定义
 用于存储聊天历史和群组/私聊状态
 """
 import json
-from datetime import datetime
-from typing import Optional
 
+from nonebot_plugin_tortoise_orm import add_model
 from tortoise import fields
 from tortoise.models import Model
+
+# 注册模型到 Tortoise ORM
+add_model(__name__)
 
 
 class GroupChatState(Model):
@@ -24,7 +26,7 @@ class GroupChatState(Model):
 
     class Meta:
         table = "llmchat_group_state"
-        description = "群组聊天状态表"
+        table_description = "群组聊天状态表"
 
 
 class PrivateChatState(Model):
@@ -40,7 +42,7 @@ class PrivateChatState(Model):
 
     class Meta:
         table = "llmchat_private_state"
-        description = "私聊状态表"
+        table_description = "私聊状态表"
 
 
 class ChatMessage(Model):
@@ -59,11 +61,7 @@ class ChatMessage(Model):
 
     class Meta:
         table = "llmchat_message"
-        description = "聊天消息历史表"
-        indexes = [
-            ("group_id", "is_private", "created_at"),  # 复合索引用于快速查询
-            ("user_id", "is_private", "created_at"),
-        ]
+        table_description = "聊天消息历史表"
 
     @staticmethod
     def serialize_content(content) -> str:
@@ -89,7 +87,7 @@ class ChatHistory(Model):
 
     class Meta:
         table = "llmchat_history"
-        description = "聊天历史快照表（用于快速加载）"
+        table_description = "聊天历史快照表（用于快速加载）"
 
     @staticmethod
     def serialize_messages(messages_list) -> str:

@@ -8,7 +8,6 @@ from datetime import datetime
 from typing import Optional
 
 from nonebot import logger
-from tortoise.exceptions import DoesNotExist
 
 from .models import ChatHistory, ChatMessage, GroupChatState, PrivateChatState
 
@@ -25,7 +24,7 @@ class DatabaseManager:
         output_reasoning_content: bool,
         random_trigger_prob: float,
     ):
-        """保存群组状态和历史到数据库"""
+        """保存群组状态"""
         try:
             # 保存或更新群组状态
             state, _ = await GroupChatState.get_or_create(
@@ -72,7 +71,7 @@ class DatabaseManager:
         user_prompt: Optional[str],
         output_reasoning_content: bool,
     ):
-        """保存私聊状态和历史到数据库"""
+        """保存私聊状态"""
         try:
             # 保存或更新私聊状态
             state, _ = await PrivateChatState.get_or_create(
@@ -110,7 +109,7 @@ class DatabaseManager:
             logger.error(f"保存私聊状态失败 用户: {user_id}, 错误: {e}")
 
     @staticmethod
-    async def load_group_state(group_id: int, history_maxlen: int) -> dict:
+    async def load_group_state(group_id: int, history_maxlen: int) -> Optional[dict]:
         """从数据库加载群组状态"""
         try:
             state = await GroupChatState.get_or_none(group_id=group_id)
@@ -145,7 +144,7 @@ class DatabaseManager:
             return None
 
     @staticmethod
-    async def load_private_state(user_id: int, history_maxlen: int) -> dict:
+    async def load_private_state(user_id: int, history_maxlen: int) -> Optional[dict]:
         """从数据库加载私聊状态"""
         try:
             state = await PrivateChatState.get_or_none(user_id=user_id)

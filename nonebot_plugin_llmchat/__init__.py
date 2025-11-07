@@ -39,7 +39,10 @@ require("nonebot_plugin_apscheduler")
 from nonebot_plugin_apscheduler import scheduler
 
 require("nonebot_plugin_tortoise_orm")
-from nonebot_plugin_tortoise_orm import init_orm_plugin
+# 必须在 require 之后导入模型，才能正确注册到 Tortoise ORM
+from . import models  # noqa: F401
+
+require("nonebot_plugin_tortoise_orm")
 
 if TYPE_CHECKING:
     from openai.types.chat import (
@@ -49,7 +52,6 @@ if TYPE_CHECKING:
 
 from .db_manager import DatabaseManager
 from .models import ChatHistory, ChatMessage, GroupChatState, PrivateChatState
-from .migration import backup_json_files, migrate_from_json_to_db
 
 __plugin_meta__ = PluginMetadata(
     name="llmchat",
@@ -644,11 +646,13 @@ async def handle_reset(event: GroupMessageEvent | PrivateMessageEvent, args: Mes
     if isinstance(event, GroupMessageEvent):
         context_id = event.group_id
         state = group_states[context_id]
+        await DatabaseManager.clear_group_history(context_id)
     else:  # PrivateMessageEvent
         if not plugin_config.enable_private_chat:
             return
         context_id = event.user_id
         state = private_chat_states[context_id]
+        await DatabaseManager.clear_private_history(context_id)
 
     state.past_events.clear()
     state.history.clear()
@@ -774,25 +778,9 @@ async def load_state():
 @driver.on_startup
 async def init_plugin():
     logger.info("插件启动初始化")
-    # 初始化 Tortoise ORM 的模型
-    await init_orm_plugin()
-    # 创建表（如果不存在）
-    try:
-        # Tortoise ORM 会自动创建表，这里只是尝试检查
-        logger.info("数据库表初始化中...")
-    except Exception as e:
-        logger.warning(f"初始化数据库时出现警告: {e}")
-    
-    # 执行迁移（从 JSON 到数据库）
-    try:
-        await migrate_from_json_to_db(plugin_config)
-    except Exception as e:
-        logger.warning(f"执行迁移时出现错误: {e}")
-    
     await load_state()
     # 每5分钟保存状态
     scheduler.add_job(save_state, "interval", minutes=5)
-    
     logger.info("插件初始化完成")
 
 
