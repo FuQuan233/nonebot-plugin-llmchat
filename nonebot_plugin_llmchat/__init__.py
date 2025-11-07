@@ -377,7 +377,7 @@ async def process_messages(context_id: int, is_group: bool = True):
                 "- 代码则不需要分段，用单独的一条消息发送。",
                 "- 请使用发送者的昵称称呼发送者，你可以礼貌地问候发送者，但只需要在第一次回答这位发送者的问题时问候他。",
                 "- 你有at群成员的能力，只需要在某条消息中插入[CQ:at,qq=（QQ号）]，"
-                "也就是CQ码。at发送者是非必要的，你可以根据你自己的想法at某个人。",
+                "也就是CQ码。at发送者是非必要的，如果不是必要，请不要at别人。",
                 "- 你有引用某条消息的能力，使用[CQ:reply,id=（消息id）]来引用。",
                 "- 如果有多条消息，你应该优先回复提到你的，一段时间之前的就不要回复了，也可以直接选择不回复。",
                 "- 如果你选择完全不回复，你只需要直接输出一个<botbr>。",
@@ -476,7 +476,8 @@ async def process_messages(context_id: int, is_group: bool = True):
                             tool_name,
                             tool_args,
                             group_id=event.group_id,
-                            bot_id=str(event.self_id)
+                            bot_id=str(event.self_id),
+                            user_id=event.user_id
                         )
                     else:
                         # 私聊时某些工具不可用（如群操作工具），跳过这些工具
@@ -487,7 +488,8 @@ async def process_messages(context_id: int, is_group: bool = True):
                                 tool_name,
                                 tool_args,
                                 group_id=None,
-                                bot_id=str(event.self_id)
+                                bot_id=str(event.self_id),
+                                user_id=event.user_id
                             )
 
                     new_messages.append({

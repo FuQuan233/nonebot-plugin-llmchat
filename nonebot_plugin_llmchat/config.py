@@ -25,6 +25,11 @@ class MCPServerConfig(BaseModel):
     # 额外字段
     friendly_name: str | None = Field(None, description="MCP服务器友好名称")
     addtional_prompt: str | None = Field(None, description="额外提示词")
+    
+    # 权限控制字段
+    require_admin: bool = Field(False, description="是否需要管理员权限")
+    admin_user_ids: list[int] = Field(default_factory=list, description="有权限的用户ID列表")
+    read_only: bool = Field(True, description="非管理员是否使用只读模式")
 
 class ScopedConfig(BaseModel):
     """LLM Chat Plugin配置"""
