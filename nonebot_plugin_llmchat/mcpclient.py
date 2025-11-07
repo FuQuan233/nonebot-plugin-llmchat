@@ -8,6 +8,8 @@ from nonebot import logger
 
 from .config import MCPServerConfig
 from .onebottools import OneBotTools
+# 导入你的自定义工具类（可选）
+# from .your_tools import YourCustomTools
 
 
 class MCPClient:
@@ -120,6 +122,12 @@ class MCPClient:
         available_tools.extend(onebot_tools)
         logger.debug(f"添加了{len(onebot_tools)}个OneBot内置工具")
 
+        # 添加自定义工具（可选）
+        # if hasattr(self, 'custom_tools'):
+        #     custom_tools = self.custom_tools.get_available_tools()
+        #     available_tools.extend(custom_tools)
+        #     logger.debug(f"添加了{len(custom_tools)}个自定义工具")
+
         # 添加MCP服务器工具
         for server_name in self.server_config.keys():
             logger.debug(f"正在从服务器[{server_name}]获取工具列表")
@@ -146,14 +154,55 @@ class MCPClient:
         logger.info(f"工具列表缓存完成，共缓存{len(available_tools)}个工具")
         return available_tools
 
-    async def call_tool(self, tool_name: str, tool_args: dict, group_id: int | None = None, bot_id: str | None = None):
+    def check_tool_permission(self, tool_name: str, user_id: int) -> tuple[bool, str | None]:
+        """检查用户是否有权限调用该工具
+        
+        返回: (有权限, 错误信息)
+        """
+        # MCP 工具权限检查
+        if tool_name.startswith("mcp__"):
+            parts = tool_name.split("__")
+            if len(parts) < 2:
+                return False, f"工具名称格式错误: {tool_name}"
+            
+            server_name = parts[1]
+            if server_name not in self.server_config:
+                return False, f"未知的 MCP 服务器: {server_name}"
+            
+            config = self.server_config[server_name]
+            
+            # 如果不需要管理员权限，直接允许
+            if not config.require_admin:
+                return True, None
+            
+            # 检查用户是否是管理员
+            if user_id not in config.admin_user_ids:
+                return False, f"您没有权限使用此工具，只有管理员才能使用"
+            
+            return True, None
+        
+        return True, None
+
+    async def call_tool(self, tool_name: str, tool_args: dict, group_id: int | None = None, bot_id: str | None = None, user_id: int | None = None):
         """按需连接调用工具，调用后立即断开"""
+        # 检查权限
+        if user_id is not None:
+            has_permission, error_msg = self.check_tool_permission(tool_name, user_id)
+            if not has_permission:
+                logger.warning(f"用户 {user_id} 尝试调用无权限的工具 {tool_name}")
+                return error_msg or "您没有权限使用此工具"
+        
         # 检查是否是OneBot内置工具
         if tool_name.startswith("ob__"):
             if group_id is None or bot_id is None:
                 return "QQ工具需要提供group_id和bot_id参数"
             logger.info(f"调用OneBot工具[{tool_name}]")
             return await self.onebot_tools.call_tool(tool_name, tool_args, group_id, bot_id)
+
+        # 检查是否是自定义工具（可选）
+        # if tool_name.startswith("custom__"):
+        #     logger.info(f"调用自定义工具[{tool_name}]")
+        #     return await self.custom_tools.call_tool(tool_name, tool_args)
 
         # 检查是否是MCP工具
         if tool_name.startswith("mcp__"):
@@ -183,6 +232,10 @@ class MCPClient:
         # 检查是否是OneBot内置工具
         if tool_name.startswith("ob__"):
             return self.onebot_tools.get_friendly_name(tool_name)
+
+        # 检查是否是自定义工具（可选）
+        # if tool_name.startswith("custom__"):
+        #     return self.custom_tools.get_friendly_name(tool_name)
 
         # 检查是否是MCP工具
         if tool_name.startswith("mcp__"):
