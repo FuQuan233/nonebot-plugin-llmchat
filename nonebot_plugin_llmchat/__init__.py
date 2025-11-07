@@ -578,33 +578,94 @@ preset_handler = on_command("API预设", priority=1, block=True, permission=SUPE
 
 @preset_handler.handle()
 async def handle_preset(event: GroupMessageEvent | PrivateMessageEvent, args: Message = CommandArg()):
-    if isinstance(event, GroupMessageEvent):
-        context_id = event.group_id
-        state = group_states[context_id]
-    else:  # PrivateMessageEvent
-        if not plugin_config.enable_private_chat:
-            return
-        context_id = event.user_id
-        state = private_chat_states[context_id]
+    # 解析命令参数
+    args_text = args.extract_plain_text().strip()
+    args_parts = args_text.split(maxsplit=1)
 
-    preset_name = args.extract_plain_text().strip()
+    target_id = None
+    preset_name = None
 
+    # 可用预设列表
+    available_presets = {p.name for p in plugin_config.api_presets}
+
+    # 只在私聊中允许 SUPERUSER 修改他人预设
+    if isinstance(event, PrivateMessageEvent) and args_parts and args_parts[0].isdigit():
+        # 第一个参数是纯数字，且不是预设名
+        if args_parts[0] not in available_presets:
+            target_id = int(args_parts[0])
+
+            # 判断目标是群聊还是私聊
+            if target_id in group_states:
+                state = group_states[target_id]
+                is_group_target = True
+            elif target_id in private_chat_states:
+                state = private_chat_states[target_id]
+                is_group_target = False
+            else:
+                # 默认创建私聊状态
+                state = private_chat_states[target_id]
+                is_group_target = False
+
+            # 如果只有目标 ID，没有预设名，返回当前预设
+            if len(args_parts) == 1:
+                context_type = "群聊" if is_group_target else "私聊"
+                available_presets_str = "\n- ".join(available_presets)
+                await preset_handler.finish(
+                    f"{context_type} {target_id} 当前API预设：{state.preset_name}\n可用API预设：\n- {available_presets_str}"
+                )
+
+            # 有预设名，进行修改
+            preset_name = args_parts[1]
+            context_id = target_id
+        else:
+            # 第一个参数虽然是数字但也是预设名，按普通流程处理
+            target_id = None
+            preset_name = args_text
+            if not plugin_config.enable_private_chat:
+                return
+            context_id = event.user_id
+            state = private_chat_states[context_id]
+            is_group_target = False
+    else:
+        # 普通情况：修改自己的预设
+        preset_name = args_text
+
+        if isinstance(event, GroupMessageEvent):
+            context_id = event.group_id
+            state = group_states[context_id]
+            is_group_target = True
+        else:  # PrivateMessageEvent
+            if not plugin_config.enable_private_chat:
+                return
+            context_id = event.user_id
+            state = private_chat_states[context_id]
+            is_group_target = False
+
+    # 处理关闭功能
     if preset_name == "off":
         state.preset_name = preset_name
-        if isinstance(event, GroupMessageEvent):
+        if target_id:
+            context_type = "群聊" if is_group_target else "私聊"
+            await preset_handler.finish(f"已关闭 {context_type} {context_id} 的llmchat功能")
+        elif isinstance(event, GroupMessageEvent):
             await preset_handler.finish("已关闭llmchat群聊功能")
         else:
             await preset_handler.finish("已关闭llmchat私聊功能")
 
-    available_presets = {p.name for p in plugin_config.api_presets}
+    # 检查预设是否存在
     if preset_name not in available_presets:
         available_presets_str = "\n- ".join(available_presets)
         await preset_handler.finish(
             f"当前API预设：{state.preset_name}\n可用API预设：\n- {available_presets_str}"
         )
 
+    # 切换预设
     state.preset_name = preset_name
-    await preset_handler.finish(f"已切换至API预设：{preset_name}")
+    if target_id:
+        context_type = "群聊" if is_group_target else "私聊"
+        await preset_handler.finish(f"已将 {context_type} {context_id} 切换至API预设：{preset_name}")
+    else:
+        await preset_handler.finish(f"已切换至API预设：{preset_name}")
 
 
 edit_preset_handler = on_command(
