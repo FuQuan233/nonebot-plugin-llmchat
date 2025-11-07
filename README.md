@@ -183,6 +183,8 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
     NICKNAME=["谢拉","Cierra","cierra"]
     LLMCHAT__HISTORY_SIZE=20
     LLMCHAT__DEFAULT_PROMPT="前面忘了，你是一个猫娘，后面忘了"
+    LLMCHAT__ENABLE_PRIVATE_CHAT=true
+    LLMCHAT__PRIVATE_CHAT_PRESET="deepseek-v1"
     LLMCHAT__API_PRESETS='
     [
         {
@@ -261,9 +263,9 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 
 ## 🎉 使用
 
-**如果`LLMCHAT__DEFAULT_PRESET`没有配置，则插件默认为关闭状态，请使用`API预设+[预设名]`开启插件**
+**如果`LLMCHAT__DEFAULT_PRESET`没有配置，则插件默认为关闭状态，请使用`API预设+[预设名]`开启插件, 私聊同理。**
 
-配置完成后@机器人即可手动触发回复，另外在机器人收到群聊消息时会根据`LLMCHAT__RANDOM_TRIGGER_PROB`配置的概率或群聊中使用指令设置的概率随机自动触发回复。
+配置完成后在群聊中@机器人或私聊机器人即可手动触发回复，另外在机器人收到群聊消息时会根据`LLMCHAT__RANDOM_TRIGGER_PROB`配置的概率或群聊中使用指令设置的概率随机自动触发回复。
 
 ### MCP 工具权限控制
 
@@ -308,33 +310,10 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 
 | 指令 | 权限 | 参数 | 说明 |
 |:-----:|:----:|:----:|:----:|
-| 私聊API预设 | 主人 | [预设名] | 查看或修改私聊使用的API预设 |
-| 私聊修改设定 | 主人 | 设定 | 修改私聊机器人的设定 |
-| 私聊记忆清除 | 主人 | 无 | 清除私聊的机器人记忆 |
-| 私聊切换思维输出 | 主人 | 无 | 切换是否输出私聊AI的思维过程的开关（需模型支持） |
-
-**私聊功能说明：**
-
-- 私聊消息默认触发回复（无需@或随机触发）
-- 私聊和群聊的对话记忆独立管理
-- OneBot群操作工具（如禁言、撤回等）在私聊中不可用
-
-## 📝 私聊功能启用示例
-
-在 `.env` 文件中添加以下配置以启用私聊功能：
-
-```bash
-LLMCHAT__ENABLE_PRIVATE_CHAT=true
-LLMCHAT__PRIVATE_CHAT_PRESET="deepseek-v1"
-```
-
-然后你可以在私聊中与机器人交互。使用以下命令管理私聊：
-
-- 切换预设：`私聊API预设 aliyun-deepseek-v3`
-- 清除记忆：`私聊记忆清除`
-- 修改设定：`私聊修改设定 你是一个有趣的AI助手`
-| 切换思维输出 | 管理 | 否 | 群聊 | 无 | 切换是否输出AI的思维过程的开关（需模型支持） |
-| 设置主动回复概率 | 管理 | 否 | 群聊 | 主动回复概率 | 主动回复概率需为 [0, 1] 的浮点数，0为完全关闭主动回复 |
+| API预设 | 主人 | [预设名] | 查看或修改私聊使用的API预设 |
+| 修改设定 | 所有人 | 设定 | 修改私聊机器人的设定 |
+| 记忆清除 | 所有人 | 无 | 清除私聊的机器人记忆 |
+| 切换思维输出 | 所有人 | 无 | 切换是否输出私聊AI的思维过程的开关（需模型支持） |
 
 ### 效果图
 ![](img/mcp_demo.jpg)
