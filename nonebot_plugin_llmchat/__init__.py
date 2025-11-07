@@ -278,7 +278,7 @@ async def handle_message(event: GroupMessageEvent | PrivateMessageEvent):
         task.add_done_callback(tasks.discard)
         tasks.add(task)
 
-async def process_images(event: GroupMessageEvent) -> list[str]:
+async def process_images(event: GroupMessageEvent | PrivateMessageEvent) -> list[str]:
     base64_images = []
     for segement in event.get_message():
         if segement.type == "image":
@@ -478,12 +478,19 @@ async def process_messages(context_id: int, is_group: bool = True):
                     # 发送工具调用提示
                     await handler.send(Message(f"正在使用{mcp_client.get_friendly_name(tool_name)}"))
 
-                    result = await mcp_client.call_tool(
-                        tool_name,
-                        tool_args,
-                        group_id=event.group_id,
-                        bot_id=str(event.self_id)
-                    )
+                    if is_group:
+                        result = await mcp_client.call_tool(
+                            tool_name,
+                            tool_args,
+                            group_id=event.group_id,
+                            bot_id=str(event.self_id)
+                        )
+                    else:
+                        result = await mcp_client.call_tool(
+                            tool_name,
+                            tool_args,
+                            bot_id=str(event.self_id)
+                        )
 
                     new_messages.append({
                         "role": "tool",

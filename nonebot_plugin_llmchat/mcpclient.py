@@ -106,45 +106,46 @@ class MCPClient:
 
         return SessionContext()
 
+    async def init_tools_cache(self):
+        """初始化工具列表缓存"""
+        if not self._cache_initialized:
+            available_tools = []
+            logger.info(f"初始化工具列表缓存，需要连接{len(self.server_config)}个服务器")
+            for server_name in self.server_config.keys():
+                logger.debug(f"正在从服务器[{server_name}]获取工具列表")
+                async with self._create_session_context(server_name) as session:
+                    response = await session.list_tools()
+                    tools = response.tools
+                    logger.debug(f"在服务器[{server_name}]中找到{len(tools)}个工具")
+
+                    available_tools.extend(
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": f"mcp__{server_name}__{tool.name}",
+                                "description": tool.description,
+                                "parameters": tool.inputSchema,
+                            },
+                        }
+                        for tool in tools
+                    )
+
+            # 缓存工具列表
+            self._tools_cache = available_tools
+            self._cache_initialized = True
+
+            logger.info(f"工具列表缓存完成，共缓存{len(available_tools)}个工具")
+
+
+
     async def get_available_tools(self, is_group: bool):
         """获取可用工具列表，使用缓存机制"""
-        if self._tools_cache is not None:
-            logger.debug("返回缓存的工具列表")
-            return self._tools_cache
-
-        logger.info(f"初始化工具列表缓存，需要连接{len(self.server_config)}个服务器")
-        available_tools = []
-
+        await self.init_tools_cache()
+        available_tools = self._tools_cache.copy() if self._tools_cache else []
         if is_group:
-            # 添加OneBot内置工具，仅在群聊中可用
-            onebot_tools = self.onebot_tools.get_available_tools()
-            available_tools.extend(onebot_tools)
-            logger.debug(f"添加了{len(onebot_tools)}个OneBot内置工具")
-
-        # 添加MCP服务器工具
-        for server_name in self.server_config.keys():
-            logger.debug(f"正在从服务器[{server_name}]获取工具列表")
-            async with self._create_session_context(server_name) as session:
-                response = await session.list_tools()
-                tools = response.tools
-                logger.debug(f"在服务器[{server_name}]中找到{len(tools)}个工具")
-
-                available_tools.extend(
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": f"mcp__{server_name}__{tool.name}",
-                            "description": tool.description,
-                            "parameters": tool.inputSchema,
-                        },
-                    }
-                    for tool in tools
-                )
-
-        # 缓存工具列表
-        self._tools_cache = available_tools
-        self._cache_initialized = True
-        logger.info(f"工具列表缓存完成，共缓存{len(available_tools)}个工具")
+            # 群聊场景，包含OneBot工具和MCP工具
+            available_tools.extend(self.onebot_tools.get_available_tools())
+        logger.debug(f"获取可用工具列表，共{len(available_tools)}个工具")
         return available_tools
 
     async def call_tool(self, tool_name: str, tool_args: dict, group_id: int | None = None, bot_id: str | None = None):
