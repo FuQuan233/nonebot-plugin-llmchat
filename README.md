@@ -173,6 +173,9 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 |:-----:|:----:|:----:|:----:|
 | friendly_name | 否 | 无 | 友好名称，用于调用时发送提示信息 |
 | additional_prompt | 否 | 无 | 关于这个工具的附加提示词 |
+| require_admin | 否 | False | 是否需要管理员权限 |
+| admin_user_ids | 否 | [] | 有权限的用户ID列表 |
+| read_only | 否 | True | 非管理员是否使用只读模式 |
 
 <details open>
 <summary>配置示例</summary>
@@ -238,6 +241,19 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
                 "formulahendry/mcp-server-code-runner"
             ]
         },
+        "portainer": {
+            "friendly_name": "Portainer 容器管理",
+            "additional_prompt": "当用户询问 Docker 容器、镜像、网络等信息时，查询容器相关数据。",
+            "command": "/path/to/portainer-mcp",
+            "args": [
+                "-server",
+                "localhost:9000",
+                "-token",
+                "<your-portainer-token>"
+            ],
+            "require_admin": true,
+            "admin_user_ids": [<your-user-id>]
+        }
     }
     '
     
@@ -248,6 +264,31 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 **如果`LLMCHAT__DEFAULT_PRESET`没有配置，则插件默认为关闭状态，请使用`API预设+[预设名]`开启插件**
 
 配置完成后@机器人即可手动触发回复，另外在机器人收到群聊消息时会根据`LLMCHAT__RANDOM_TRIGGER_PROB`配置的概率或群聊中使用指令设置的概率随机自动触发回复。
+
+### MCP 工具权限控制
+
+部分 MCP 工具可能具有敏感操作（如容器管理、代码执行等），支持通过权限配置来限制访问：
+
+- **`require_admin`**: 设为 `true` 时，只有 `admin_user_ids` 中的用户才能调用此工具
+- **`admin_user_ids`**: 用户 ID 列表，这些用户具有调用该工具的权限
+- **`read_only`**: 设为 `true` 时，非管理员用户调用工具时会使用只读模式（如果工具支持）
+
+**权限检查流程**：
+1. 用户触发调用工具
+2. 系统检查 `require_admin` 字段
+3. 若为 `true`，检查用户 ID 是否在 `admin_user_ids` 列表中
+4. 允许则继续调用，否则返回错误提示
+
+**示例：限制 Portainer 工具只给主人使用**
+```json
+"portainer": {
+    "friendly_name": "Portainer 容器管理",
+    "command": "/path/to/portainer-mcp",
+    "args": [...],
+    "require_admin": true,
+    "admin_user_ids": [3282076201]
+}
+```
 
 ### 群聊指令表
 
