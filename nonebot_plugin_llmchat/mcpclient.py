@@ -106,7 +106,7 @@ class MCPClient:
 
         return SessionContext()
 
-    async def get_available_tools(self):
+    async def get_available_tools(self, is_group: bool):
         """获取可用工具列表，使用缓存机制"""
         if self._tools_cache is not None:
             logger.debug("返回缓存的工具列表")
@@ -115,10 +115,11 @@ class MCPClient:
         logger.info(f"初始化工具列表缓存，需要连接{len(self.server_config)}个服务器")
         available_tools = []
 
-        # 添加OneBot内置工具
-        onebot_tools = self.onebot_tools.get_available_tools()
-        available_tools.extend(onebot_tools)
-        logger.debug(f"添加了{len(onebot_tools)}个OneBot内置工具")
+        if is_group:
+            # 添加OneBot内置工具，仅在群聊中可用
+            onebot_tools = self.onebot_tools.get_available_tools()
+            available_tools.extend(onebot_tools)
+            logger.debug(f"添加了{len(onebot_tools)}个OneBot内置工具")
 
         # 添加MCP服务器工具
         for server_name in self.server_config.keys():

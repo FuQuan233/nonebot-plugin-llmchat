@@ -8,7 +8,7 @@
 
 # nonebot-plugin-llmchat
 
-_✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型的AI群聊插件 ✨_
+_✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型、群聊&私聊的AI对话插件 ✨_
 
 
 <a href="./LICENSE">
@@ -47,6 +47,12 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
    - @触发 + 随机概率触发
    - 支持处理回复消息
    - 群聊消息顺序处理，防止消息错乱
+
+1. **群聊和私聊支持**
+   - 支持群聊场景（默认启用）
+   - 支持私聊场景（可选启用）
+   - 分别管理群聊和私聊的对话记忆
+   - 灵活的权限配置
 
 1. **分群聊上下文记忆管理**
    - 分群聊保留对话历史记录（可配置保留条数）
@@ -120,6 +126,8 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 | LLMCHAT__BLACKLIST_USER_IDS | 否 | [] | 黑名单用户ID列表，机器人将不会处理黑名单用户的消息 |
 | LLMCHAT__IGNORE_PREFIXES | 否 | [] | 需要忽略的消息前缀列表，匹配到这些前缀的消息不会处理 |
 | LLMCHAT__MCP_SERVERS | 否 | {} | MCP服务器配置，具体见下表 |
+| LLMCHAT__ENABLE_PRIVATE_CHAT | 否 | False | 是否启用私聊功能 |
+| LLMCHAT__PRIVATE_CHAT_PRESET | 否 | off | 私聊默认使用的预设名称 |
 
 ### 内置OneBot工具
 
@@ -172,6 +180,8 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
     NICKNAME=["谢拉","Cierra","cierra"]
     LLMCHAT__HISTORY_SIZE=20
     LLMCHAT__DEFAULT_PROMPT="前面忘了，你是一个猫娘，后面忘了"
+    LLMCHAT__ENABLE_PRIVATE_CHAT=true
+    LLMCHAT__PRIVATE_CHAT_PRESET="deepseek-v1"
     LLMCHAT__API_PRESETS='
     [
         {
@@ -237,11 +247,11 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 
 ## 🎉 使用
 
-**如果`LLMCHAT__DEFAULT_PRESET`没有配置，则插件默认为关闭状态，请使用`API预设+[预设名]`开启插件**
+**如果`LLMCHAT__DEFAULT_PRESET`没有配置，则插件默认为关闭状态，请使用`API预设+[预设名]`开启插件, 私聊同理。**
 
-配置完成后@机器人即可手动触发回复，另外在机器人收到群聊消息时会根据`LLMCHAT__RANDOM_TRIGGER_PROB`配置的概率或群聊中使用指令设置的概率随机自动触发回复。
+配置完成后在群聊中@机器人或私聊机器人即可手动触发回复，另外在机器人收到群聊消息时会根据`LLMCHAT__RANDOM_TRIGGER_PROB`配置的概率或群聊中使用指令设置的概率随机自动触发回复。
 
-### 指令表
+### 群聊指令表
 
 以下指令均仅对发送的群聊生效，不同群聊配置不互通。
 
@@ -252,6 +262,17 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 | 记忆清除 | 管理 | 否 | 群聊 | 无 | 清除机器人的记忆 |
 | 切换思维输出 | 管理 | 否 | 群聊 | 无 | 切换是否输出AI的思维过程的开关（需模型支持） |
 | 设置主动回复概率 | 管理 | 否 | 群聊 | 主动回复概率 | 主动回复概率需为 [0, 1] 的浮点数，0为完全关闭主动回复 |
+
+### 私聊指令表
+
+以下指令仅在启用私聊功能（`LLMCHAT__ENABLE_PRIVATE_CHAT=true`）后可用，这些指令均只对发送者的私聊生效。
+
+| 指令 | 权限 | 参数 | 说明 |
+|:-----:|:----:|:----:|:----:|
+| API预设 | 主人 | [预设名] | 查看或修改私聊使用的API预设 |
+| 修改设定 | 所有人 | 设定 | 修改私聊机器人的设定 |
+| 记忆清除 | 所有人 | 无 | 清除私聊的机器人记忆 |
+| 切换思维输出 | 所有人 | 无 | 切换是否输出私聊AI的思维过程的开关（需模型支持） |
 
 ### 效果图
 ![](img/mcp_demo.jpg)
