@@ -52,6 +52,7 @@ if TYPE_CHECKING:
 
 from .db_manager import DatabaseManager
 from .models import ChatHistory, ChatMessage, GroupChatState, PrivateChatState
+from .migration import migrate_from_json_to_db
 
 __plugin_meta__ = PluginMetadata(
     name="llmchat",
@@ -800,6 +801,9 @@ async def load_state():
 @driver.on_startup
 async def init_plugin():
     logger.info("插件启动初始化")
+    # 首先进行数据迁移（如果存在 JSON 文件）
+    logger.info("检查是否需要进行 JSON 数据迁移...")
+    await migrate_from_json_to_db(Config(llmchat=plugin_config))
     await load_state()
     # 每30分钟保存一次状态作为备份（已开启实时保存）
     scheduler.add_job(save_state, "interval", minutes=30)

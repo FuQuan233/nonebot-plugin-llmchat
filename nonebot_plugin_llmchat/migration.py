@@ -10,7 +10,7 @@ from datetime import datetime
 
 from nonebot import logger
 
-from .config import Config, get_plugin_config
+from .config import Config
 from .db_manager import DatabaseManager
 from .models import ChatHistory, GroupChatState, PrivateChatState
 
@@ -34,6 +34,9 @@ async def migrate_from_json_to_db(plugin_config: Config):
     if not data_file or not os.path.exists(data_file):
         logger.info("未找到群组状态 JSON 文件，跳过迁移")
         return
+    
+    total_migrated_groups = 0
+    total_migrated_users = 0
     
     try:
         # 迁移群组状态
@@ -77,7 +80,8 @@ async def migrate_from_json_to_db(plugin_config: Config):
                 logger.error(f"迁移群组 {gid_str} 失败: {e}")
         
         logger.info(f"成功迁移 {migrated_groups} 个群组的状态")
-    
+        total_migrated_groups = migrated_groups
+        
     except Exception as e:
         logger.error(f"迁移群组状态失败: {e}")
     
@@ -123,30 +127,36 @@ async def migrate_from_json_to_db(plugin_config: Config):
                     logger.error(f"迁移用户 {uid_str} 失败: {e}")
             
             logger.info(f"成功迁移 {migrated_users} 个用户的私聊状态")
+            total_migrated_users = migrated_users
         
         except Exception as e:
             logger.error(f"迁移私聊状态失败: {e}")
     
-    logger.info("JSON 迁移完成")
+    # 迁移成功后，重命名 JSON 文件为 .migrated
+    if total_migrated_groups > 0 or total_migrated_users > 0:
+        logger.info("迁移成功，开始重命名 JSON 文件...")
+        rename_json_files_to_migrated()
+    
+    logger.info(f"JSON 迁移完成（群组: {total_migrated_groups}，用户: {total_migrated_users}）")
 
 
-async def backup_json_files():
-    """备份旧的 JSON 文件"""
+def rename_json_files_to_migrated():
+    """将已迁移的 JSON 文件重命名为 .migrated"""
     if not data_file:
         return
     
     if os.path.exists(data_file):
-        backup_file = f"{data_file}.backup"
+        migrated_file = f"{data_file}.migrated"
         try:
-            os.rename(data_file, backup_file)
-            logger.info(f"已备份群组状态文件: {backup_file}")
+            os.rename(data_file, migrated_file)
+            logger.info(f"已将群组状态文件重命名为: {migrated_file}")
         except Exception as e:
-            logger.warning(f"备份文件失败: {e}")
+            logger.warning(f"重命名文件失败: {e}")
     
     if private_data_file and os.path.exists(private_data_file):
-        backup_file = f"{private_data_file}.backup"
+        migrated_file = f"{private_data_file}.migrated"
         try:
-            os.rename(private_data_file, backup_file)
-            logger.info(f"已备份私聊状态文件: {backup_file}")
+            os.rename(private_data_file, migrated_file)
+            logger.info(f"已将私聊状态文件重命名为: {migrated_file}")
         except Exception as e:
-            logger.warning(f"备份文件失败: {e}")
+            logger.warning(f"重命名文件失败: {e}")
