@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from pydantic import BaseModel, Field
 
 
@@ -21,6 +23,8 @@ class MCPServerConfig(BaseModel):
     env: dict[str, str] | None = Field({}, description="stdio模式下MCP命令环境变量")
     url: str | None = Field(None, description="sse模式下MCP服务器地址")
     headers: dict[str, str] | None = Field({}, description="sse模式下http请求头，用于认证或其他设置")
+    transport_type: str | None = Field(None, description="请求类型 sse、stdio 或 streamablehttp")
+    
 
     # 额外字段
     friendly_name: str | None = Field(None, description="MCP服务器友好名称")
@@ -55,3 +59,9 @@ class ScopedConfig(BaseModel):
 
 class Config(BaseModel):
     llmchat: ScopedConfig
+
+@dataclass
+class transportType:
+    sse = "sse"
+    stdio = "stdio"
+    streamablehttp = "streamablehttp"

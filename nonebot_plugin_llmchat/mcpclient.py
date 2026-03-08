@@ -4,9 +4,13 @@ from contextlib import AsyncExitStack
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
 from mcp.client.stdio import stdio_client
+try:
+    from mcp.client.streamable_http import streamable_http_client as streamablehttp_client
+except:
+    from mcp.client.streamable_http import streamablehttp_client
 from nonebot import logger
 
-from .config import MCPServerConfig
+from .config import MCPServerConfig, transportType
 from .onebottools import OneBotTools
 
 
@@ -85,18 +89,33 @@ class MCPClient:
                 self.exit_stack = AsyncExitStack()
 
             async def __aenter__(self):
-                if config.url:
-                    transport = await self.exit_stack.enter_async_context(
-                        sse_client(url=config.url, headers=config.headers)
-                    )
-                elif config.command:
-                    transport = await self.exit_stack.enter_async_context(
-                        stdio_client(StdioServerParameters(**config.model_dump()))
-                    )
-                else:
-                    raise ValueError("Server config must have either url or command")
+                if config.transport_type is None:
+                    if config.url:
+                        config.transport_type = transportType.sse
+                    elif config.command:
+                        config.transport_type = transportType.stdio
+                    else:
+                        raise ValueError("Server config must have either url or command")
+                
+                match config.transport_type:
+                    case transportType.sse:
+                        transport = await self.exit_stack.enter_async_context(
+                                sse_client(url=config.url, headers=config.headers)
+                            )
+                        read, write = transport
+                    case transportType.stdio:
+                        transport = await self.exit_stack.enter_async_context(
+                                stdio_client(StdioServerParameters(**config.model_dump()))
+                            )
+                        read, write = transport
+                    case transportType.streamablehttp:
+                        transport = await self.exit_stack.enter_async_context(
+                                streamablehttp_client(url=config.url, headers=config.headers)
+                            )
+                        read, write, session_callback = transport
+                    case _:
+                        raise ValueError("Unknown transport type")
 
-                read, write = transport
                 self.session = await self.exit_stack.enter_async_context(ClientSession(read, write))
                 await self.session.initialize()
                 return self.session
