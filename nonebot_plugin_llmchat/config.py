@@ -16,6 +16,14 @@ class PresetConfig(BaseModel):
     support_mcp: bool = Field(False, description="是否支持MCP")
     support_image: bool = Field(False, description="是否支持图片输入")
 
+    # 子模型能力标记
+    support_to_image: bool = Field(False, description="是否支持生成图片")
+    support_to_voice: bool = Field(False, description="是否支持生成语音")
+    support_to_video: bool = Field(False, description="是否支持生成视频")
+
+    # 可调用的子模型列表
+    call_model_list: list[str] | None = Field(None, description="可调用的子模型名称列表")
+
 class MCPServerConfig(BaseModel):
     """MCP服务器配置"""
     command: str | None = Field(None, description="stdio模式下MCP命令")

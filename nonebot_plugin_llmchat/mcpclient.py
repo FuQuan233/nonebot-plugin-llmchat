@@ -10,21 +10,22 @@ except:
     from mcp.client.streamable_http import streamablehttp_client
 from nonebot import logger
 
-from .config import MCPServerConfig, transportType
+from .config import MCPServerConfig, PresetConfig, ScopedConfig, transportType
 from .onebottools import OneBotTools
 from .scheduler import SchedulerManager
+from .submodel_caller import SubModelCaller
 
 
 class MCPClient:
     _instance = None
     _initialized = False
 
-    def __new__(cls, server_config: dict[str, MCPServerConfig] | None = None):
+    def __new__(cls, server_config: dict[str, MCPServerConfig] | None = None, plugin_config: ScopedConfig | None = None):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, server_config: dict[str, MCPServerConfig] | None = None):
+    def __init__(self, server_config: dict[str, MCPServerConfig] | None = None, plugin_config: ScopedConfig | None = None):
         if self._initialized:
             return
 
@@ -33,6 +34,7 @@ class MCPClient:
 
         logger.info(f"正在初始化MCPClient单例，共有{len(server_config)}个服务器配置")
         self.server_config = server_config
+        self.plugin_config = plugin_config
         self.sessions = {}
         self.exit_stack = AsyncExitStack()
         # 添加工具列表缓存
@@ -42,16 +44,18 @@ class MCPClient:
         self.onebot_tools = OneBotTools()
         # 初始化定时任务管理器
         self.scheduler_manager = SchedulerManager.get_instance()
+        # 初始化子模型调用器（如果有 plugin_config）
+        self.submodel_caller = SubModelCaller.get_instance(plugin_config) if plugin_config else None
         self._initialized = True
         logger.debug("MCPClient单例初始化成功")
 
     @classmethod
-    def get_instance(cls, server_config: dict[str, MCPServerConfig] | None = None):
+    def get_instance(cls, server_config: dict[str, MCPServerConfig] | None = None, plugin_config: ScopedConfig | None = None):
         """获取MCPClient实例"""
         if cls._instance is None:
             if server_config is None:
                 raise ValueError("server_config must be provided for first initialization")
-            cls._instance = cls(server_config)
+            cls._instance = cls(server_config, plugin_config)
         return cls._instance
 
     @classmethod
@@ -160,8 +164,13 @@ class MCPClient:
 
 
 
-    async def get_available_tools(self, is_group: bool):
-        """获取可用工具列表，使用缓存机制"""
+    async def get_available_tools(self, is_group: bool, current_preset: PresetConfig | None = None):
+        """获取可用工具列表，使用缓存机制
+
+        Args:
+            is_group: 是否群聊场景
+            current_preset: 当前使用的预设配置（用于获取子模型工具）
+        """
         await self.init_tools_cache()
         available_tools = self._tools_cache.copy() if self._tools_cache else []
         if is_group:
@@ -169,6 +178,12 @@ class MCPClient:
             available_tools.extend(self.onebot_tools.get_available_tools())
         # 添加定时任务工具（群聊和私聊都可用）
         available_tools.extend(self.scheduler_manager.get_available_tools())
+        # 添加子模型调用工具（根据当前预设的 call_model_list 动态生成）
+        if self.submodel_caller and current_preset:
+            submodel_tools = self.submodel_caller.get_available_tools(current_preset)
+            available_tools.extend(submodel_tools)
+            if submodel_tools:
+                logger.debug(f"添加了 {len(submodel_tools)} 个子模型调用工具")
         logger.debug(f"获取可用工具列表，共{len(available_tools)}个工具")
         return available_tools
 
@@ -179,9 +194,20 @@ class MCPClient:
         group_id: int | None = None,
         bot_id: str | None = None,
         user_id: int | None = None,
-        is_group: bool = True
+        is_group: bool = True,
+        current_preset: PresetConfig | None = None
     ):
-        """按需连接调用工具，调用后立即断开"""
+        """按需连接调用工具，调用后立即断开
+
+        Args:
+            tool_name: 工具名称
+            tool_args: 工具参数
+            group_id: 群号（群聊时必需）
+            bot_id: 机器人ID
+            user_id: 用户ID
+            is_group: 是否群聊
+            current_preset: 当前使用的预设配置（子模型调用时必需）
+        """
         # 检查是否是OneBot内置工具
         if tool_name.startswith("ob__"):
             if group_id is None or bot_id is None:
@@ -198,6 +224,17 @@ class MCPClient:
             return await self.scheduler_manager.call_tool(
                 tool_name, tool_args, context_id, is_group, user_id
             )
+
+        # 检查是否是子模型调用工具
+        if tool_name.startswith("submodel__"):
+            if not self.submodel_caller:
+                return "子模型调用器未初始化"
+            if not current_preset:
+                return "子模型调用需要提供 current_preset 参数"
+            logger.info(f"调用子模型工具[{tool_name}]")
+            result = await self.submodel_caller.call_tool(tool_name, tool_args, current_preset)
+            # 返回结构化结果，让上层处理
+            return result
 
         # 检查是否是MCP工具
         if tool_name.startswith("mcp__"):
@@ -231,6 +268,12 @@ class MCPClient:
         # 检查是否是定时任务工具
         if tool_name.startswith("scheduler__"):
             return self.scheduler_manager.get_friendly_name(tool_name)
+
+        # 检查是否是子模型调用工具
+        if tool_name.startswith("submodel__"):
+            if self.submodel_caller:
+                return self.submodel_caller.get_friendly_name(tool_name)
+            return tool_name
 
         # 检查是否是MCP工具
         if tool_name.startswith("mcp__"):
