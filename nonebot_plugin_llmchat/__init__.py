@@ -31,6 +31,7 @@ from openai import AsyncOpenAI
 
 from .config import Config, PresetConfig
 from .mcpclient import MCPClient
+from .scheduler import SchedulerManager
 
 require("nonebot_plugin_localstore")
 import nonebot_plugin_localstore as store
@@ -483,13 +484,17 @@ async def process_messages(context_id: int, is_group: bool = True):
                             tool_name,
                             tool_args,
                             group_id=event.group_id,
-                            bot_id=str(event.self_id)
+                            bot_id=str(event.self_id),
+                            user_id=event.user_id,
+                            is_group=True
                         )
                     else:
                         result = await mcp_client.call_tool(
                             tool_name,
                             tool_args,
-                            bot_id=str(event.self_id)
+                            bot_id=str(event.self_id),
+                            user_id=event.user_id,
+                            is_group=False
                         )
 
                     new_messages.append({
@@ -856,6 +861,9 @@ async def load_state():
 async def init_plugin():
     logger.info("插件启动初始化")
     await load_state()
+    # 加载定时任务
+    scheduler_manager = SchedulerManager.get_instance()
+    await scheduler_manager.load_tasks()
     # 每5分钟保存状态
     scheduler.add_job(save_state, "interval", minutes=5)
 
@@ -864,5 +872,8 @@ async def init_plugin():
 async def cleanup_plugin():
     logger.info("插件关闭清理")
     await save_state()
+    # 保存定时任务
+    scheduler_manager = SchedulerManager.get_instance()
+    await scheduler_manager.save_tasks()
     # 销毁MCPClient单例
     await MCPClient.destroy_instance()

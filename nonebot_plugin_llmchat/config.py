@@ -55,6 +55,11 @@ class ScopedConfig(BaseModel):
     )
     enable_private_chat: bool = Field(False, description="是否启用私聊功能")
     private_chat_preset: str = Field("off", description="私聊默认使用的预设名称")
+    scheduler_max_retry: int = Field(5, description="定时任务AI调用最大重试次数")
+    scheduler_default_reminder: str = Field(
+        "您设置的提醒时间到了：{description}",
+        description="AI调用失败时的默认提醒模板"
+    )
 
 
 class Config(BaseModel):

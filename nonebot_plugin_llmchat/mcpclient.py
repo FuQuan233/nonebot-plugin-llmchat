@@ -12,6 +12,7 @@ from nonebot import logger
 
 from .config import MCPServerConfig, transportType
 from .onebottools import OneBotTools
+from .scheduler import SchedulerManager
 
 
 class MCPClient:
@@ -39,6 +40,8 @@ class MCPClient:
         self._cache_initialized = False
         # 初始化OneBot工具
         self.onebot_tools = OneBotTools()
+        # 初始化定时任务管理器
+        self.scheduler_manager = SchedulerManager.get_instance()
         self._initialized = True
         logger.debug("MCPClient单例初始化成功")
 
@@ -114,7 +117,7 @@ class MCPClient:
                             )
                         read, write, session_callback = transport
                     case _:
-                        raise ValueError("Unknown transport type")
+                        raise ValueError("Server config must have either url or command")
 
                 self.session = await self.exit_stack.enter_async_context(ClientSession(read, write))
                 await self.session.initialize()
@@ -164,10 +167,20 @@ class MCPClient:
         if is_group:
             # 群聊场景，包含OneBot工具和MCP工具
             available_tools.extend(self.onebot_tools.get_available_tools())
+        # 添加定时任务工具（群聊和私聊都可用）
+        available_tools.extend(self.scheduler_manager.get_available_tools())
         logger.debug(f"获取可用工具列表，共{len(available_tools)}个工具")
         return available_tools
 
-    async def call_tool(self, tool_name: str, tool_args: dict, group_id: int | None = None, bot_id: str | None = None):
+    async def call_tool(
+        self,
+        tool_name: str,
+        tool_args: dict,
+        group_id: int | None = None,
+        bot_id: str | None = None,
+        user_id: int | None = None,
+        is_group: bool = True
+    ):
         """按需连接调用工具，调用后立即断开"""
         # 检查是否是OneBot内置工具
         if tool_name.startswith("ob__"):
@@ -175,6 +188,16 @@ class MCPClient:
                 return "QQ工具需要提供group_id和bot_id参数"
             logger.info(f"调用OneBot工具[{tool_name}]")
             return await self.onebot_tools.call_tool(tool_name, tool_args, group_id, bot_id)
+
+        # 检查是否是定时任务工具
+        if tool_name.startswith("scheduler__"):
+            context_id = group_id if is_group else user_id
+            if context_id is None or user_id is None:
+                return "定时任务工具需要提供context_id和user_id参数"
+            logger.info(f"调用定时任务工具[{tool_name}]")
+            return await self.scheduler_manager.call_tool(
+                tool_name, tool_args, context_id, is_group, user_id
+            )
 
         # 检查是否是MCP工具
         if tool_name.startswith("mcp__"):
@@ -204,6 +227,10 @@ class MCPClient:
         # 检查是否是OneBot内置工具
         if tool_name.startswith("ob__"):
             return self.onebot_tools.get_friendly_name(tool_name)
+
+        # 检查是否是定时任务工具
+        if tool_name.startswith("scheduler__"):
+            return self.scheduler_manager.get_friendly_name(tool_name)
 
         # 检查是否是MCP工具
         if tool_name.startswith("mcp__"):
