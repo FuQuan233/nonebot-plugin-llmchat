@@ -67,7 +67,12 @@ class SchedulerTools:
 - daily: 每天指定时间提醒，需提供 hour (0-23) 和 minute (0-59)
 - weekly: 每周指定天提醒，需提供 hour, minute, day_of_week (0=周一, 1=周二...6=周日)
 - yearly: 每年指定日期提醒，需提供 month (1-12), day (1-31), hour, minute
-- once: 一次性提醒，需提供 minutes_later 表示几分钟后触发 (1-525600)""",
+- once: 一次性提醒，需提供 minutes_later 表示几分钟后触发 (1-525600)
+
+重要提示：
+- description 字段非常重要，它将在任务触发时用于生成提醒信息
+- 如果任务需要获取实时信息（如天气、新闻等），请在描述中明确说明，触发时AI会调用相应工具获取最新数据
+- 如果用户没有提供完整信息（如查天气但没说城市），可以先创建任务，然后询问用户，得到答案后用 scheduler__update_task 更新描述""",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -160,7 +165,11 @@ class SchedulerTools:
                 "type": "function",
                 "function": {
                     "name": "scheduler__update_task",
-                    "description": "更新定时任务的描述",
+                    "description": """更新定时任务的描述。重要提示：
+- 当用户在后续对话中补充了与已创建定时任务相关的信息时（如地点、具体要求、人名等），你应该主动调用此工具更新任务描述
+- 例如：用户创建了"提醒我明天天气"的任务，后来告诉你他在"北京"，你应该更新描述为"提醒我北京明天的天气"
+- 任务描述应包含执行任务所需的所有关键信息，因为触发时AI会根据描述来生成提醒或执行操作
+- 如果不确定最近创建的任务ID，可以先调用 scheduler__list_tasks 查看""",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -170,7 +179,7 @@ class SchedulerTools:
                             },
                             "description": {
                                 "type": "string",
-                                "description": "新的任务描述"
+                                "description": "新的任务描述，应包含执行任务所需的所有关键信息"
                             }
                         },
                         "required": ["task_id", "description"]
@@ -568,7 +577,7 @@ class SchedulerManager:
             await self.save_tasks()
 
     async def _generate_ai_reminder(self, task: ScheduledTask, plugin_config) -> str:
-        """调用AI生成提醒信息"""
+        """调用AI生成提醒信息，支持调用MCP工具获取实时信息"""
         max_retry = plugin_config.scheduler_max_retry
         default_reminder = plugin_config.scheduler_default_reminder.format(description=task.description)
 
@@ -600,10 +609,12 @@ class SchedulerManager:
         system_prompt = f"""你是一个友好的提醒助手。用户设置了一个定时提醒任务，现在任务触发了。
 请根据任务描述生成一条简短、友好的提醒消息。
 要求：
+- 如果任务描述中涉及需要获取实时信息的内容（如天气、新闻、股票等），你应该先使用相应的工具获取最新信息，然后基于获取到的信息生成提醒
 - 消息要简洁，不要太长
 - 语气要友好、亲切
 - 可以适当使用语气词或颜文字
-- 不要有多余的解释，直接发送提醒内容"""
+- 不要有多余的解释，直接发送提醒内容
+- 如果使用了工具获取信息，请将关键信息整合到提醒消息中"""
 
         user_prompt = f"任务描述：{task.description}"
 
@@ -622,19 +633,86 @@ class SchedulerManager:
                 timeout=plugin_config.request_timeout,
             )
 
+        # 获取可用工具（如果预设支持MCP）
+        available_tools = None
+        mcp_client = None
+        if preset.support_mcp:
+            try:
+                from .mcpclient import MCPClient
+                mcp_client = MCPClient.get_instance(plugin_config.mcp_servers)
+                # 获取MCP工具，但不包含OneBot工具和定时任务工具（避免在提醒时创建新任务）
+                await mcp_client.init_tools_cache()
+                available_tools = mcp_client._tools_cache.copy() if mcp_client._tools_cache else []
+                logger.debug(f"定时任务触发时可用工具数: {len(available_tools)}")
+            except Exception as e:
+                logger.warning(f"获取MCP工具列表失败: {e}")
+                available_tools = None
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
         for attempt in range(max_retry):
             try:
-                response = await client.chat.completions.create(
-                    model=preset.model_name,
-                    max_tokens=256,
-                    temperature=0.7,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
-                    ]
-                )
+                # 构建请求参数
+                request_params = {
+                    "model": preset.model_name,
+                    "max_tokens": 512,  # 增加token限制以支持工具调用
+                    "temperature": 0.7,
+                    "messages": messages
+                }
 
-                content = response.choices[0].message.content
+                # 如果有可用工具，添加到请求中
+                if available_tools:
+                    request_params["tools"] = available_tools
+
+                response = await client.chat.completions.create(**request_params)
+                message = response.choices[0].message
+
+                # 处理工具调用
+                while available_tools and mcp_client and message and message.tool_calls:
+                    logger.info(f"定时任务触发时AI调用工具: {[tc.function.name for tc in message.tool_calls]}")
+
+                    # 添加assistant消息
+                    messages.append({
+                        "role": "assistant",
+                        "tool_calls": [tool_call.model_dump() for tool_call in message.tool_calls]
+                    })
+
+                    # 处理每个工具调用
+                    for tool_call in message.tool_calls:
+                        tool_name = tool_call.function.name
+                        tool_args = json.loads(tool_call.function.arguments)
+
+                        logger.debug(f"调用工具: {tool_name}, 参数: {tool_args}")
+
+                        # 调用MCP工具（使用简化的参数，因为这里不需要群操作）
+                        try:
+                            result = await mcp_client.call_tool(
+                                tool_name,
+                                tool_args,
+                                group_id=task.context_id if task.is_group else None,
+                                bot_id=None,
+                                user_id=task.creator_id,
+                                is_group=task.is_group
+                            )
+                            result_str = str(result) if result else "工具调用成功但无返回结果"
+                        except Exception as e:
+                            logger.error(f"工具调用失败: {e}")
+                            result_str = f"工具调用失败: {e}"
+
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": result_str
+                        })
+
+                    # 再次调用AI处理工具结果
+                    response = await client.chat.completions.create(**request_params)
+                    message = response.choices[0].message
+
+                content = message.content
                 if content:
                     logger.debug(f"AI生成提醒成功: {content[:50]}...")
                     return content.strip()
