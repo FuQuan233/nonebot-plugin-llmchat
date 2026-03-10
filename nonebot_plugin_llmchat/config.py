@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from pydantic import BaseModel, Field
 
 
@@ -14,6 +16,14 @@ class PresetConfig(BaseModel):
     support_mcp: bool = Field(False, description="是否支持MCP")
     support_image: bool = Field(False, description="是否支持图片输入")
 
+    # 子模型能力标记
+    support_to_image: bool = Field(False, description="是否支持生成图片")
+    support_to_voice: bool = Field(False, description="是否支持生成语音")
+    support_to_video: bool = Field(False, description="是否支持生成视频")
+
+    # 可调用的子模型列表
+    call_model_list: list[str] | None = Field(None, description="可调用的子模型名称列表")
+
 class MCPServerConfig(BaseModel):
     """MCP服务器配置"""
     command: str | None = Field(None, description="stdio模式下MCP命令")
@@ -21,6 +31,8 @@ class MCPServerConfig(BaseModel):
     env: dict[str, str] | None = Field({}, description="stdio模式下MCP命令环境变量")
     url: str | None = Field(None, description="sse模式下MCP服务器地址")
     headers: dict[str, str] | None = Field({}, description="sse模式下http请求头，用于认证或其他设置")
+    transport_type: str | None = Field(None, description="请求类型 sse、stdio 或 streamablehttp")
+    
 
     # 额外字段
     friendly_name: str | None = Field(None, description="MCP服务器友好名称")
@@ -51,7 +63,18 @@ class ScopedConfig(BaseModel):
     )
     enable_private_chat: bool = Field(False, description="是否启用私聊功能")
     private_chat_preset: str = Field("off", description="私聊默认使用的预设名称")
+    scheduler_max_retry: int = Field(5, description="定时任务AI调用最大重试次数")
+    scheduler_default_reminder: str = Field(
+        "您设置的提醒时间到了：{description}",
+        description="AI调用失败时的默认提醒模板"
+    )
 
 
 class Config(BaseModel):
     llmchat: ScopedConfig
+
+@dataclass
+class transportType:
+    sse = "sse"
+    stdio = "stdio"
+    streamablehttp = "streamablehttp"
