@@ -360,7 +360,7 @@ async def process_messages(context_id: int, is_group: bool = True):
             logger.debug(f"从队列获取消息 用户：{context_id} 消息ID：{event.message_id}")
             group_id = None
         past_events_snapshot = []
-        mcp_client = MCPClient.get_instance(plugin_config.mcp_servers)
+        mcp_client = MCPClient.get_instance(plugin_config.mcp_servers, plugin_config)
         try:
             # 构建系统提示，分成多行以满足行长限制
             chat_type = "群聊" if is_group else "私聊"
@@ -447,8 +447,13 @@ async def process_messages(context_id: int, is_group: bool = True):
             }
 
             if preset.support_mcp:
-                available_tools = await mcp_client.get_available_tools(is_group)
+                available_tools = await mcp_client.get_available_tools(is_group, preset)
                 client_config["tools"] = available_tools
+
+            # 用于存储子模型生成的多媒体内容
+            submodel_images: list[str] = []
+            submodel_voices: list[str] = []
+            submodel_videos: list[str] = []
 
             response = await client.chat.completions.create(
                 **client_config,
@@ -486,7 +491,8 @@ async def process_messages(context_id: int, is_group: bool = True):
                             group_id=event.group_id,
                             bot_id=str(event.self_id),
                             user_id=event.user_id,
-                            is_group=True
+                            is_group=True,
+                            current_preset=preset
                         )
                     else:
                         result = await mcp_client.call_tool(
@@ -494,8 +500,36 @@ async def process_messages(context_id: int, is_group: bool = True):
                             tool_args,
                             bot_id=str(event.self_id),
                             user_id=event.user_id,
-                            is_group=False
+                            is_group=False,
+                            current_preset=preset
                         )
+
+                    # 处理子模型返回的结构化结果
+                    if isinstance(result, dict) and tool_name.startswith("submodel__"):
+                        if result.get("success"):
+                            # 收集多媒体内容
+                            if result.get("images"):
+                                submodel_images.extend(result["images"])
+                                logger.info(f"子模型生成了 {len(result['images'])} 张图片")
+                            if result.get("audio"):
+                                submodel_voices.append(result["audio"])
+                                logger.info("子模型生成了语音")
+                            if result.get("video"):
+                                submodel_videos.append(result["video"])
+                                logger.info("子模型生成了视频")
+                            # 构建给主模型的结果消息
+                            result_msg = f"成功使用模型 {result.get('model_used', '未知')} 生成内容。"
+                            if result.get("content"):
+                                result_msg += f"\n子模型回复：{result['content']}"
+                            if result.get("images"):
+                                result_msg += f"\n已生成 {len(result['images'])} 张图片，将在你回复后发送给用户。"
+                            if result.get("audio"):
+                                result_msg += "\n已生成语音，将在你回复后发送给用户。"
+                            if result.get("video"):
+                                result_msg += "\n已生成视频，将在你回复后发送给用户。"
+                            result = result_msg
+                        else:
+                            result = f"生成失败：{result.get('error', '未知错误')}"
 
                     new_messages.append({
                         "role": "tool",
@@ -557,6 +591,7 @@ async def process_messages(context_id: int, is_group: bool = True):
             assert reply is not None
             await send_split_messages(handler, reply)
 
+            # 发送主模型直接生成的图片
             if reply_images:
                 logger.debug(f"API响应 图片数：{len(reply_images)}")
                 for i, image in enumerate(reply_images, start=1):
@@ -564,6 +599,50 @@ async def process_messages(context_id: int, is_group: bool = True):
                     image_base64 = image["image_url"]["url"].removeprefix("data:image/png;base64,")
                     image_msg = MessageSegment.image(base64.b64decode(image_base64))
                     await handler.send(image_msg)
+
+            # 发送子模型生成的图片
+            if submodel_images:
+                logger.info(f"发送子模型生成的 {len(submodel_images)} 张图片")
+                for i, img_base64 in enumerate(submodel_images, start=1):
+                    try:
+                        logger.debug(f"正在发送子模型图片 {i}/{len(submodel_images)}")
+                        # 处理可能的 data URL 前缀
+                        if img_base64.startswith("data:"):
+                            img_base64 = img_base64.split(",", 1)[-1] if "," in img_base64 else img_base64
+                        image_msg = MessageSegment.image(base64.b64decode(img_base64))
+                        await handler.send(image_msg)
+                    except Exception as e:
+                        logger.error(f"发送子模型图片失败: {e}")
+
+            # 发送子模型生成的语音
+            if submodel_voices:
+                logger.info(f"发送子模型生成的 {len(submodel_voices)} 条语音")
+                for i, voice_data in enumerate(submodel_voices, start=1):
+                    try:
+                        logger.debug(f"正在发送子模型语音 {i}/{len(submodel_voices)}")
+                        if voice_data.startswith("data:"):
+                            voice_data = voice_data.split(",", 1)[-1] if "," in voice_data else voice_data
+                        voice_msg = MessageSegment.record(base64.b64decode(voice_data))
+                        await handler.send(voice_msg)
+                    except Exception as e:
+                        logger.error(f"发送子模型语音失败: {e}")
+
+            # 发送子模型生成的视频
+            if submodel_videos:
+                logger.info(f"发送子模型生成的 {len(submodel_videos)} 个视频")
+                for i, video_data in enumerate(submodel_videos, start=1):
+                    try:
+                        logger.debug(f"正在发送子模型视频 {i}/{len(submodel_videos)}")
+                        # 视频可能是 URL 或 base64
+                        if video_data.startswith("http"):
+                            video_msg = MessageSegment.video(video_data)
+                        else:
+                            if video_data.startswith("data:"):
+                                video_data = video_data.split(",", 1)[-1] if "," in video_data else video_data
+                            video_msg = MessageSegment.video(base64.b64decode(video_data))
+                        await handler.send(video_msg)
+                    except Exception as e:
+                        logger.error(f"发送子模型视频失败: {e}")
 
         except Exception as e:
             logger.opt(exception=e).error(f"API请求失败 {'群号' if is_group else '用户'}：{context_id}")
