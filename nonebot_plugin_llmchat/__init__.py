@@ -418,6 +418,9 @@ async def process_messages(context_id: int, is_group: bool = True):
 
             content: list[ChatCompletionContentPartParam] = []
 
+            # 收集用户消息中的图片（用于传递给子模型作为参考）
+            user_message_images: list[str] = []
+
             # 将机器人错过的消息推送给LLM
             past_events_snapshot = list(state.past_events)
             state.past_events.clear()
@@ -426,10 +429,18 @@ async def process_messages(context_id: int, is_group: bool = True):
                 content.append({"type": "text", "text": text_content})
 
                 # 将消息中的图片转成 base64
+                base64_images = await process_images(ev)
+
+                # 收集图片用于子模型调用
+                user_message_images.extend(base64_images)
+
+                # 如果主模型支持图片输入，也传递给主模型
                 if preset.support_image:
-                    base64_images = await process_images(ev)
                     for base64_image in base64_images:
                         content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}})
+
+            if user_message_images:
+                logger.info(f"用户消息中包含 {len(user_message_images)} 张图片，将用于子模型调用")
 
             new_messages: list[ChatCompletionMessageParam] = [
                 {"role": "user", "content": content}
@@ -484,6 +495,9 @@ async def process_messages(context_id: int, is_group: bool = True):
                     # 发送工具调用提示
                     await handler.send(Message(f"正在使用{mcp_client.get_friendly_name(tool_name)}"))
 
+                    # 对于子模型调用，传递用户消息中的图片作为参考
+                    images_for_submodel = user_message_images if tool_name.startswith("submodel__") else None
+
                     if is_group:
                         result = await mcp_client.call_tool(
                             tool_name,
@@ -492,7 +506,8 @@ async def process_messages(context_id: int, is_group: bool = True):
                             bot_id=str(event.self_id),
                             user_id=event.user_id,
                             is_group=True,
-                            current_preset=preset
+                            current_preset=preset,
+                            user_images=images_for_submodel
                         )
                     else:
                         result = await mcp_client.call_tool(
@@ -501,7 +516,8 @@ async def process_messages(context_id: int, is_group: bool = True):
                             bot_id=str(event.self_id),
                             user_id=event.user_id,
                             is_group=False,
-                            current_preset=preset
+                            current_preset=preset,
+                            user_images=images_for_submodel
                         )
 
                     # 处理子模型返回的结构化结果

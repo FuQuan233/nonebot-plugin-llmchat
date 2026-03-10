@@ -99,6 +99,7 @@ class SubModelCaller:
 使用说明：
 - 当用户要求生成图片时使用此工具
 - prompt 应该是详细的图片描述，用英文效果更好
+- 如果用户消息中包含图片（发送或引用），系统会自动将这些图片作为参考传递给子模型，无需在 prompt 中描述
 - 系统会自动选择最优的模型，如果失败会自动切换备选模型
 - 返回结果包含 base64 编码的图片数据""",
                     "parameters": {
@@ -106,7 +107,7 @@ class SubModelCaller:
                         "properties": {
                             "prompt": {
                                 "type": "string",
-                                "description": "图片生成提示词，描述要生成的图片内容，建议使用英文"
+                                "description": "图片生成提示词，描述要生成的图片内容或对参考图片的修改要求"
                             },
                             "preferred_model": {
                                 "type": "string",
@@ -307,7 +308,8 @@ class SubModelCaller:
         self,
         current_preset: PresetConfig,
         prompt: str,
-        preferred_model: str | None = None
+        preferred_model: str | None = None,
+        reference_images: list[str] | None = None
     ) -> dict[str, Any]:
         """生成图片
 
@@ -315,6 +317,7 @@ class SubModelCaller:
             current_preset: 当前主模型预设
             prompt: 图片生成提示词
             preferred_model: 可选的指定模型名称
+            reference_images: 可选的参考图片列表（base64 编码）
 
         Returns:
             包含生成结果的字典：
@@ -351,15 +354,37 @@ class SubModelCaller:
         except Exception as e:
             logger.debug(f"获取 MCP 工具失败: {e}")
 
+        # 构建用户消息内容
+        user_content: list[dict[str, Any]] = []
+
+        # 添加文本提示
+        user_content.append({"type": "text", "text": prompt})
+
+        # 如果有参考图片，添加到消息中
+        if reference_images:
+            logger.info(f"子模型调用包含 {len(reference_images)} 张参考图片")
+            for img_base64 in reference_images:
+                # 确保格式正确
+                if not img_base64.startswith("data:"):
+                    img_base64 = f"data:image/jpeg;base64,{img_base64}"
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": {"url": img_base64}
+                })
+
         # 构建消息
+        system_prompt = "你是一个图片生成助手。请根据用户的描述生成图片。直接生成图片，不需要额外解释。"
+        if reference_images:
+            system_prompt += "\n用户提供了参考图片，请根据参考图片和用户的描述来生成或修改图片。"
+
         messages = [
             {
                 "role": "system",
-                "content": "你是一个图片生成助手。请根据用户的描述生成图片。直接生成图片，不需要额外解释。"
+                "content": system_prompt
             },
             {
                 "role": "user",
-                "content": prompt
+                "content": user_content if reference_images else prompt
             }
         ]
 
@@ -493,7 +518,8 @@ class SubModelCaller:
         self,
         current_preset: PresetConfig,
         prompt: str,
-        preferred_model: str | None = None
+        preferred_model: str | None = None,
+        reference_images: list[str] | None = None
     ) -> dict[str, Any]:
         """生成视频
 
@@ -501,6 +527,7 @@ class SubModelCaller:
             current_preset: 当前主模型预设
             prompt: 视频生成提示词
             preferred_model: 可选的指定模型名称
+            reference_images: 可选的参考图片列表（base64 编码）
 
         Returns:
             包含生成结果的字典
@@ -521,14 +548,33 @@ class SubModelCaller:
                 key=lambda p: 0 if p.name == preferred_model else 1
             )
 
+        # 构建用户消息内容
+        user_content: list[dict[str, Any]] = []
+        user_content.append({"type": "text", "text": prompt})
+
+        # 如果有参考图片，添加到消息中
+        if reference_images:
+            logger.info(f"视频生成包含 {len(reference_images)} 张参考图片")
+            for img_base64 in reference_images:
+                if not img_base64.startswith("data:"):
+                    img_base64 = f"data:image/jpeg;base64,{img_base64}"
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": {"url": img_base64}
+                })
+
+        system_prompt = "你是一个视频生成助手。请根据用户的描述生成视频。"
+        if reference_images:
+            system_prompt += "\n用户提供了参考图片，请根据参考图片和用户的描述来生成视频。"
+
         messages = [
             {
                 "role": "system",
-                "content": "你是一个视频生成助手。请根据用户的描述生成视频。"
+                "content": system_prompt
             },
             {
                 "role": "user",
-                "content": prompt
+                "content": user_content if reference_images else prompt
             }
         ]
 
@@ -566,7 +612,8 @@ class SubModelCaller:
         self,
         tool_name: str,
         tool_args: dict[str, Any],
-        current_preset: PresetConfig
+        current_preset: PresetConfig,
+        reference_images: list[str] | None = None
     ) -> dict[str, Any]:
         """工具调用入口
 
@@ -574,6 +621,7 @@ class SubModelCaller:
             tool_name: 工具名称
             tool_args: 工具参数
             current_preset: 当前主模型预设
+            reference_images: 可选的参考图片列表（base64 编码），来自用户消息
 
         Returns:
             工具调用结果
@@ -582,7 +630,8 @@ class SubModelCaller:
             return await self.generate_image(
                 current_preset=current_preset,
                 prompt=tool_args.get("prompt", ""),
-                preferred_model=tool_args.get("preferred_model")
+                preferred_model=tool_args.get("preferred_model"),
+                reference_images=reference_images
             )
         elif tool_name == "submodel__generate_voice":
             return await self.generate_voice(
@@ -594,7 +643,8 @@ class SubModelCaller:
             return await self.generate_video(
                 current_preset=current_preset,
                 prompt=tool_args.get("prompt", ""),
-                preferred_model=tool_args.get("preferred_model")
+                preferred_model=tool_args.get("preferred_model"),
+                reference_images=reference_images
             )
         else:
             return {

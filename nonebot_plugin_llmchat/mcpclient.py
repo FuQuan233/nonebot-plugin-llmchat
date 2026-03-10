@@ -195,7 +195,8 @@ class MCPClient:
         bot_id: str | None = None,
         user_id: int | None = None,
         is_group: bool = True,
-        current_preset: PresetConfig | None = None
+        current_preset: PresetConfig | None = None,
+        user_images: list[str] | None = None
     ):
         """按需连接调用工具，调用后立即断开
 
@@ -207,6 +208,7 @@ class MCPClient:
             user_id: 用户ID
             is_group: 是否群聊
             current_preset: 当前使用的预设配置（子模型调用时必需）
+            user_images: 用户消息中的图片列表（base64 编码），用于子模型参考
         """
         # 检查是否是OneBot内置工具
         if tool_name.startswith("ob__"):
@@ -231,8 +233,10 @@ class MCPClient:
                 return "子模型调用器未初始化"
             if not current_preset:
                 return "子模型调用需要提供 current_preset 参数"
-            logger.info(f"调用子模型工具[{tool_name}]")
-            result = await self.submodel_caller.call_tool(tool_name, tool_args, current_preset)
+            logger.info(f"调用子模型工具[{tool_name}]，参考图片数: {len(user_images) if user_images else 0}")
+            result = await self.submodel_caller.call_tool(
+                tool_name, tool_args, current_preset, reference_images=user_images
+            )
             # 返回结构化结果，让上层处理
             return result
 
