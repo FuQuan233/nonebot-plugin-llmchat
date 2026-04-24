@@ -101,7 +101,6 @@ class PrivateChatState:
         self.last_active = time.time()
         self.past_events = deque(maxlen=plugin_config.past_events_size)
         self.group_prompt: str | None = None
-        self.user_prompt: str | None = None
         self.output_reasoning_content = False
 
 
@@ -364,7 +363,7 @@ async def process_messages(context_id: int, is_group: bool = True):
             # 构建系统提示，分成多行以满足行长限制
             chat_type = "群聊" if is_group else "私聊"
             bot_names = "、".join(list(driver.config.nickname))
-            default_prompt = (state.group_prompt if is_group else state.user_prompt) or plugin_config.default_prompt
+            default_prompt = (state.group_prompt) or plugin_config.default_prompt
 
             system_lines = [
                 f"我想要你帮我在{chat_type}中闲聊，大家一般叫你{bot_names}。",
