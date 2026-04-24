@@ -443,6 +443,7 @@ async def process_messages(context_id: int, is_group: bool = True):
                 "max_tokens": preset.max_tokens,
                 "temperature": preset.temperature,
                 "timeout": 60,
+                "extra_body": preset.extra_body,
             }
 
             if preset.support_mcp:
@@ -461,10 +462,14 @@ async def process_messages(context_id: int, is_group: bool = True):
 
             # 处理响应并处理工具调用
             while preset.support_mcp and message and message.tool_calls:
-                new_messages.append({
+                llm_reply: ChatCompletionMessageParam = {
                     "role": "assistant",
+                    "content": message.content,
                     "tool_calls": [tool_call.model_dump() for tool_call in message.tool_calls]
-                })
+                }
+
+                if preset.request_with_reasoning_content:
+                    llm_reply["reasoning_content"] = message.reasoning_content# pyright: ignore[reportGeneralTypeIssues]
 
                 # 发送LLM调用工具时的回复，一般没有
                 if message.content:
@@ -531,6 +536,9 @@ async def process_messages(context_id: int, is_group: bool = True):
                 # openai的sdk里的assistant消息暂时没有images字段，需要单独处理
                 llm_reply["images"] = reply_images # pyright: ignore[reportGeneralTypeIssues]
 
+            if preset.request_with_reasoning_content:
+                llm_reply["reasoning_content"] = reasoning_content# pyright: ignore[reportGeneralTypeIssues]
+
             new_messages.append(llm_reply)
 
             # 请求成功后再保存历史记录，保证user和assistant穿插，防止R1模型报错
@@ -540,12 +548,20 @@ async def process_messages(context_id: int, is_group: bool = True):
             if state.output_reasoning_content and reasoning_content:
                 try:
                     bot = get_bot(str(event.self_id))
-                    await bot.send_group_forward_msg(
-                        group_id=group_id,
-                        messages=build_reasoning_forward_nodes(
-                            bot.self_id, reasoning_content
-                        ),
-                    )
+                    if is_group:
+                        await bot.send_group_forward_msg(
+                            group_id=group_id,
+                            messages=build_reasoning_forward_nodes(
+                                bot.self_id, reasoning_content
+                            ),
+                        )
+                    else:
+                        await bot.send_private_forward_msg(
+                            user_id=context_id,
+                            messages=build_reasoning_forward_nodes(
+                                bot.self_id, reasoning_content
+                            ),
+                        )
                 except Exception as e:
                     logger.error(f"合并转发消息发送失败：\n{e!s}\n")
 

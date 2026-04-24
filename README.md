@@ -157,6 +157,8 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 | proxy | 否 | 无 | 请求API时使用的HTTP代理 |
 | support_mcp | 否 | False | 是否支持MCP协议 |
 | support_image | 否 | False | 是否支持图片输入 |
+| extra_body | 否 | {} | 额外的请求体字段，用于兼容不同API的特殊参数 |
+| request_with_reasoning_content | 否 | false | 请求中是否包含推理过程内容（部分模型要求进行了工具调用后，必须完整回传推理过程给API） |
 
 
 LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的格式基本兼容 Claude.app 的配置格式，具体支持如下
@@ -184,6 +186,18 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
     LLMCHAT__PRIVATE_CHAT_PRESET="deepseek-v1"
     LLMCHAT__API_PRESETS='
     [
+        {
+            "name": "deepseek-v4-pro",
+            "api_key": "sk-your-api-key",
+            "model_name": "deepseek-v4-pro",
+            "api_base": "https://api.deepseek.com",
+            "support_mcp": true,
+            "support_image": false,
+            "extra_body": {
+                "thinking": {"type": "enabled"}
+            },
+            "request_with_reasoning_content": true
+        }，
         {
             "name": "aliyun-deepseek-v3",
             "api_key": "sk-your-api-key",

@@ -13,6 +13,11 @@ class PresetConfig(BaseModel):
     proxy: str = Field("", description="HTTP代理服务器")
     support_mcp: bool = Field(False, description="是否支持MCP")
     support_image: bool = Field(False, description="是否支持图片输入")
+    extra_body: dict = Field({}, description="额外的请求体字段，用于兼容不同API的特殊参数")
+    request_with_reasoning_content: bool = Field(
+        False,
+        description="请求中是否包含推理过程内容（部分模型要求进行了工具调用后，必须完整回传推理过程给API）"
+    )
 
 class MCPServerConfig(BaseModel):
     """MCP服务器配置"""
