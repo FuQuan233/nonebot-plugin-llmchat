@@ -83,6 +83,21 @@ class OneBotTools:
                     },
                 },
             },
+            {
+                "type": "function",
+                "function": {
+                    "name": "ob__set_group_card",
+                    "description": "修改群成员的群名片。需要机器人有管理员权限。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "user_id": {"type": "string", "description": "要修改名片的用户QQ号"},
+                            "card": {"type": "string", "description": "新的群名片内容，留空则清除群名片"},
+                        },
+                        "required": ["user_id"],
+                    },
+                },
+            },
         ]
 
     def get_friendly_name(self, tool_name: str) -> str:
@@ -94,6 +109,7 @@ class OneBotTools:
             "ob__get_group_member_list": "OneBot - 获取成员列表",
             "ob__poke_user": "OneBot - 戳一戳用户",
             "ob__recall_message": "OneBot - 撤回消息",
+            "ob__set_group_card": "OneBot - 修改群名片",
         }
         return friendly_names.get(tool_name, tool_name)
 
@@ -118,6 +134,8 @@ class OneBotTools:
                 return await self._poke_user(bot, group_id, tool_args)
             elif tool_name == "ob__recall_message":
                 return await self._recall_message(bot, group_id, tool_args)
+            elif tool_name == "ob__set_group_card":
+                return await self._set_group_card(bot, group_id, tool_args)
             else:
                 return f"未知的工具: {tool_name}"
 
@@ -212,4 +230,16 @@ class OneBotTools:
         except Exception as e:
             return f"撤回消息失败: {e!s}"
 
+    async def _set_group_card(self, bot: Bot, group_id: int, args: dict[str, Any]) -> str:
+        """修改群成员名片"""
+        user_id = int(args["user_id"])
+        card = args.get("card", "")  # 如果没有提供card参数，默认为空字符串（清除名片）
 
+        try:
+            await bot.set_group_card(group_id=group_id, user_id=user_id, card=card)
+            if card:
+                return f"成功修改用户 {user_id} 的群名片为: {card}"
+            else:
+                return f"成功清除用户 {user_id} 的群名片"
+        except Exception as e:
+            return f"修改群名片失败: {e!s}"
