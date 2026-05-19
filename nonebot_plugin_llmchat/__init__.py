@@ -496,6 +496,8 @@ async def process_messages(context_id: int, is_group: bool = True):
                             bot_id=str(event.self_id)
                         )
 
+                    new_messages.append(llm_reply)
+
                     new_messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
