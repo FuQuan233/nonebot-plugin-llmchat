@@ -475,6 +475,8 @@ async def process_messages(context_id: int, is_group: bool = True):
                     await send_split_messages(handler, message.content)
 
                 # 处理每个工具调用
+                new_messages.append(llm_reply)
+
                 for tool_call in message.tool_calls:
                     tool_name = tool_call.function.name
                     tool_args = json.loads(tool_call.function.arguments)
@@ -495,8 +497,6 @@ async def process_messages(context_id: int, is_group: bool = True):
                             tool_args,
                             bot_id=str(event.self_id)
                         )
-
-                    new_messages.append(llm_reply)
 
                     new_messages.append({
                         "role": "tool",
