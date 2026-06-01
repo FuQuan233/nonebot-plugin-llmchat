@@ -479,7 +479,20 @@ async def process_messages(context_id: int, is_group: bool = True):
 
                 for tool_call in message.tool_calls:
                     tool_name = tool_call.function.name
-                    tool_args = json.loads(tool_call.function.arguments)
+                    try:
+                        tool_args = json.loads(tool_call.function.arguments)
+                    except (json.JSONDecodeError, TypeError, ValueError) as e:
+                        error_message = (
+                            f"工具调用参数格式错误，无法解析 {tool_name} 的 arguments: {e!s}. "
+                            f"原始参数: {tool_call.function.arguments}"
+                        )
+                        logger.warning(error_message)
+                        new_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": error_message,
+                        })
+                        continue
 
                     # 发送工具调用提示
                     await handler.send(Message(f"正在使用{mcp_client.get_friendly_name(tool_name)}"))
