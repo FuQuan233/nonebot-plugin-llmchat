@@ -480,6 +480,8 @@ async def process_messages(context_id: int, is_group: bool = True):
                 new_messages.append(llm_reply)
 
                 for tool_call in message.tool_calls:
+                    logger.debug(f"处理工具调用：{tool_call.function.name} 参数：{tool_call.function.arguments}")
+
                     tool_name = tool_call.function.name
                     try:
                         tool_args = json.loads(tool_call.function.arguments)
