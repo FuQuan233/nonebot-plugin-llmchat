@@ -395,11 +395,13 @@ async def process_messages(context_id: int, is_group: bool = True):
 
             systemPrompt = "\n".join(system_lines)
             if preset.support_mcp:
-                systemPrompt += "你也可以使用一些工具，下面是关于这些工具的额外说明：\n"
+                systemPrompt += "\n你也可以使用一些工具，下面是关于这些工具的额外说明：\n"
                 for mcp_name, mcp_config in plugin_config.mcp_servers.items():
-                    if mcp_config.addtional_prompt:
-                        systemPrompt += f"{mcp_name}：{mcp_config.addtional_prompt}"
+                    if mcp_config.additional_prompt:
+                        systemPrompt += f"{mcp_name}：{mcp_config.additional_prompt}"
                         systemPrompt += "\n"
+
+            logger.debug(f"构建系统提示词：\n{systemPrompt}")
 
             messages: list[ChatCompletionMessageParam] = [
                 {"role": "system", "content": systemPrompt}

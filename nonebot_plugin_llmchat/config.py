@@ -29,7 +29,7 @@ class MCPServerConfig(BaseModel):
 
     # 额外字段
     friendly_name: str | None = Field(None, description="MCP服务器友好名称")
-    addtional_prompt: str | None = Field(None, description="额外提示词")
+    additional_prompt: str | None = Field(None, description="额外提示词")
 
 class ScopedConfig(BaseModel):
     """LLM Chat Plugin配置"""
