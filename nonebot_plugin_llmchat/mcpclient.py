@@ -106,26 +106,28 @@ class MCPClient:
                     sse_client(url=config.url, headers=config.headers)
                 )
             else:
-                # 未指定协议，自动探测：先尝试 streamable_http，失败则回退到 sse
+                # 未指定协议，自动探测：先尝试 sse，失败则回退到 streamable_http
+                # （sse 服务器对 streamable_http 的 POST 请求会卡住，反之 sse 连 streamable_http 服务器会快速返回 405）
                 logger.debug(f"服务器[{server_name}]未指定传输协议，开始自动探测")
                 probe_stack = AsyncExitStack()
                 try:
-                    http_client = await probe_stack.enter_async_context(
-                        httpx.AsyncClient(headers=config.headers or {})
-                    )
-                    read, write, _ = await probe_stack.enter_async_context(
-                        streamable_http_client(url=config.url, http_client=http_client)
+                    read, write = await probe_stack.enter_async_context(
+                        sse_client(url=config.url, headers=config.headers)
                     )
                     await session_stack.enter_async_context(probe_stack)
                     transport = (read, write)
-                    logger.debug(f"服务器[{server_name}]自动探测成功: 使用 streamable_http 传输协议")
+                    logger.debug(f"服务器[{server_name}]自动探测成功: 使用 sse 传输协议")
                 except Exception as e:
                     await probe_stack.aclose()
-                    logger.debug(f"服务器[{server_name}]streamable_http 探测失败({e})，回退到 sse")
-                    transport = await session_stack.enter_async_context(
-                        sse_client(url=config.url, headers=config.headers)
+                    logger.debug(f"服务器[{server_name}]sse 探测失败({e})，回退到 streamable_http")
+                    http_client = await session_stack.enter_async_context(
+                        httpx.AsyncClient(headers=config.headers or {})
                     )
-                    logger.debug(f"服务器[{server_name}]自动探测成功: 使用 sse 传输协议")
+                    read, write, _ = await session_stack.enter_async_context(
+                        streamable_http_client(url=config.url, http_client=http_client)
+                    )
+                    transport = (read, write)
+                    logger.debug(f"服务器[{server_name}]自动探测成功: 使用 streamable_http 传输协议")
         elif config.command:
             stdio_params: dict[str, Any] = {
                 "command": config.command,
