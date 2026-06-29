@@ -168,8 +168,9 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 | command | stdio服务器必填 | 无 | stdio服务器MCP命令 |
 | args | 否 | [] | stdio服务器MCP命令参数 |
 | env | 否 | {} | stdio服务器环境变量 |
-| url | sse服务器必填 | 无 | sse服务器地址 |
-| headers | 否 | {} | sse模式下http请求头，用于认证或其他设置 |
+| url | 远程服务器必填 | 无 | 远程MCP服务器地址 |
+| headers | 否 | {} | 远程服务器http请求头，用于认证或其他设置 |
+| transport | 否 | 自动 | 远程MCP传输协议类型，可选 `sse` 或 `streamable_http` ，不填则自动探测 |
 
 以下为在 Claude.app 的MCP服务器配置基础上增加的字段
 | 配置项 | 必填 | 默认值 | 说明 |
@@ -255,6 +256,12 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
                 "formulahendry/mcp-server-code-runner"
             ]
         },
+        "tavily": {
+            "friendly_name": "Tavily搜索",
+            "additional_prompt": "当你需要搜索最新的互联网信息时，请使用 tavily 工具。",
+            "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=<your-api-key>",
+            "transport": "streamable_http"
+        }
     }
     '
     
