@@ -6,8 +6,8 @@ from typing import Any, cast
 import httpx
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
-from mcp.client.streamable_http import streamable_http_client
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamable_http_client
 from nonebot import logger
 
 from .config import MCPServerConfig
@@ -93,36 +93,28 @@ class MCPClient:
             transport_type = config.transport
             if transport_type == "streamable_http":
                 logger.debug(f"服务器[{server_name}]使用 streamable_http 传输协议")
-                http_client = await session_stack.enter_async_context(
-                    httpx.AsyncClient(headers=config.headers or {})
-                )
+                http_client = await session_stack.enter_async_context(httpx.AsyncClient(headers=config.headers or {}))
                 read, write, _ = await session_stack.enter_async_context(
                     streamable_http_client(url=config.url, http_client=http_client)
                 )
                 transport = (read, write)
             elif transport_type == "sse":
                 logger.debug(f"服务器[{server_name}]使用 sse 传输协议")
-                transport = await session_stack.enter_async_context(
-                    sse_client(url=config.url, headers=config.headers)
-                )
+                transport = await session_stack.enter_async_context(sse_client(url=config.url, headers=config.headers))
             else:
                 # 未指定协议，自动探测：先尝试 sse，失败则回退到 streamable_http
                 # （sse 服务器对 streamable_http 的 POST 请求会卡住，反之 sse 连 streamable_http 服务器会快速返回 405）
                 logger.debug(f"服务器[{server_name}]未指定传输协议，开始自动探测")
                 probe_stack = AsyncExitStack()
                 try:
-                    read, write = await probe_stack.enter_async_context(
-                        sse_client(url=config.url, headers=config.headers)
-                    )
+                    read, write = await probe_stack.enter_async_context(sse_client(url=config.url, headers=config.headers))
                     await session_stack.enter_async_context(probe_stack)
                     transport = (read, write)
                     logger.debug(f"服务器[{server_name}]自动探测成功: 使用 sse 传输协议")
                 except Exception as e:
                     await probe_stack.aclose()
                     logger.debug(f"服务器[{server_name}]sse 探测失败({e})，回退到 streamable_http")
-                    http_client = await session_stack.enter_async_context(
-                        httpx.AsyncClient(headers=config.headers or {})
-                    )
+                    http_client = await session_stack.enter_async_context(httpx.AsyncClient(headers=config.headers or {}))
                     read, write, _ = await session_stack.enter_async_context(
                         streamable_http_client(url=config.url, http_client=http_client)
                     )
@@ -136,9 +128,7 @@ class MCPClient:
             }
             if self.default_command_cwd:
                 stdio_params["cwd"] = self.default_command_cwd
-            transport = await session_stack.enter_async_context(
-                cast(Any, stdio_client(StdioServerParameters(**stdio_params)))
-            )
+            transport = await session_stack.enter_async_context(cast(Any, stdio_client(StdioServerParameters(**stdio_params))))
         else:
             raise ValueError("Server config must have either url or command")
 
@@ -235,8 +225,6 @@ class MCPClient:
             self._cache_initialized = True
 
             logger.info(f"工具列表缓存完成，共缓存{len(available_tools)}个工具")
-
-
 
     async def get_available_tools(self, is_group: bool):
         """获取可用工具列表，使用缓存机制"""
