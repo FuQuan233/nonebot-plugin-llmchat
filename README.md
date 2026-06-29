@@ -123,6 +123,7 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 | LLMCHAT__DEFAULT_PRESET | 否 | off | 默认使用的预设名称，配置为off则为关闭 |
 | LLMCHAT__RANDOM_TRIGGER_PROB | 否 | 0.05 | 默认随机触发概率 [0, 1] |
 | LLMCHAT__DEFAULT_PROMPT | 否 | 你的回答应该尽量简洁、幽默、可以使用一些语气词、颜文字。你应该拒绝回答任何政治相关的问题。 | 默认提示词 |
+| LLMCHAT__MCP_SERVER_CWD | 否 | 无 | command类型MCP服务器全局工作目录（cwd） |
 | LLMCHAT__BLACKLIST_USER_IDS | 否 | [] | 黑名单用户ID列表，机器人将不会处理黑名单用户的消息 |
 | LLMCHAT__IGNORE_PREFIXES | 否 | [] | 需要忽略的消息前缀列表，匹配到这些前缀的消息不会处理 |
 | LLMCHAT__MCP_SERVERS | 否 | {} | MCP服务器配置，具体见下表 |
@@ -165,7 +166,7 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 | 配置项 | 必填 | 默认值 | 说明 |
 |:-----:|:----:|:----:|:----:|
 | command | stdio服务器必填 | 无 | stdio服务器MCP命令 |
-| arg | 否 | [] | stdio服务器MCP命令参数 |
+| args | 否 | [] | stdio服务器MCP命令参数 |
 | env | 否 | {} | stdio服务器环境变量 |
 | url | sse服务器必填 | 无 | sse服务器地址 |
 | headers | 否 | {} | sse模式下http请求头，用于认证或其他设置 |

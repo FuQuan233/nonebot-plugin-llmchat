@@ -48,6 +48,10 @@ class ScopedConfig(BaseModel):
         "你的回答应该尽量简洁、幽默、可以使用一些语气词、颜文字。你应该拒绝回答任何政治相关的问题。",
         description="默认提示词",
     )
+    mcp_server_cwd: str | None = Field(
+        None,
+        description="command类型MCP服务器的全局工作目录（cwd）"
+    )
     mcp_servers: dict[str, MCPServerConfig] = Field({}, description="MCP服务器配置")
     blacklist_user_ids: set[int] = Field(set(), description="黑名单用户ID列表")
     ignore_prefixes: list[str] = Field(
