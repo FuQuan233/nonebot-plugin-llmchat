@@ -120,6 +120,9 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 | LLMCHAT__HISTORY_SIZE | 否 | 20 | LLM上下文消息保留数量（1-40），越大token消耗量越多 |
 | LLMCHAT__PAST_EVENTS_SIZE | 否 | 10 | 触发回复时发送的群消息数量（1-20），越大token消耗量越多 |
 | LLMCHAT__REQUEST_TIMEOUT | 否 | 30 | API请求超时时间（秒） |
+| LLMCHAT__MAX_TOOL_ROUNDS | 否 | 8 | 单次对话最大工具调用轮数，达到后强制生成最终回答 |
+| LLMCHAT__MAX_REPEATED_TOOL_CALLS | 否 | 2 | 工具名及参数完全相同时允许实际执行的最大次数 |
+| LLMCHAT__MCP_TIMEOUT | 否 | 30 | MCP建连、工具发现及执行的超时时间（秒） |
 | LLMCHAT__DEFAULT_PRESET | 否 | off | 默认使用的预设名称，配置为off则为关闭 |
 | LLMCHAT__RANDOM_TRIGGER_PROB | 否 | 0.05 | 默认随机触发概率 [0, 1] |
 | LLMCHAT__DEFAULT_PROMPT | 否 | 你的回答应该尽量简洁、幽默、可以使用一些语气词、颜文字。你应该拒绝回答任何政治相关的问题。 | 默认提示词 |
@@ -266,6 +269,23 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
     '
     
 </details>
+
+## 🧩 代码结构
+
+核心代码按职责拆分：
+
+- `__init__.py`：仅负责 NoneBot 注册、依赖装配和生命周期。
+- `state.py`：群聊/私聊状态与预设选择。
+- `dispatcher.py`：每会话单 worker 的可靠队列调度。
+- `conversation.py`：LLM 请求、有限工具循环和回复发送。
+- `message_utils.py` 与 `prompts.py`：消息转换、图片处理和提示词构建。
+- `mcpclient.py` 与 `onebottools.py`：外部 MCP 和 OneBot 工具适配。
+- `persistence.py`：带锁和原子替换的状态持久化。
+- `commands.py`：管理命令注册。
+
+运行回归测试：
+
+    python -m unittest discover -s tests -v
 
 ## 🎉 使用
 
