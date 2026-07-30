@@ -13,6 +13,7 @@ class PresetConfig(BaseModel):
     proxy: str = Field(default="", description="HTTP代理服务器")
     support_mcp: bool = Field(default=False, description="是否支持MCP")
     support_image: bool = Field(default=False, description="是否支持图片输入")
+    stream: bool = Field(default=False, description="是否使用流式响应")
     extra_body: dict = Field(default_factory=dict, description="额外请求体字段")
     request_with_reasoning_content: bool = Field(
         default=False,

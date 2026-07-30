@@ -83,7 +83,7 @@ class ToolLoopTests(unittest.IsolatedAsyncioTestCase):
         client = FakeClient()
         mcp_client = FakeMCPClient()
         transcript = [{"role": "user", "content": "hello"}]
-        message = await service._run_tool_loop(
+        completion = await service._run_tool_loop(
             client=cast(Any, client),
             preset=preset,
             mcp_client=cast(Any, mcp_client),
@@ -94,7 +94,7 @@ class ToolLoopTests(unittest.IsolatedAsyncioTestCase):
             is_group=False,
         )
 
-        assert message.content == "final answer"
+        assert completion.message.content == "final answer"
         assert mcp_client.call_count == 2
         assert len(client.chat.completions.calls) == 5
         assert "tools" not in client.chat.completions.calls[-1]

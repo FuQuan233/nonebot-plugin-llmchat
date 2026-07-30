@@ -18,10 +18,11 @@ from .message_utils import (
     download_images,
     format_message,
     pop_reasoning_content,
-    send_split_messages,
+    send_reply_messages,
 )
 from .prompts import build_system_prompt
 from .state import ChatState, StateStore
+from .streaming import CompletionResult, StreamedMessageBuilder, StreamingReplyEmitter
 
 
 class ConversationService:
@@ -117,7 +118,7 @@ class ConversationService:
 
         client = self._create_client(preset)
         try:
-            message = await self._run_tool_loop(
+            completion = await self._run_tool_loop(
                 client=client,
                 preset=preset,
                 mcp_client=mcp_client,
@@ -130,6 +131,7 @@ class ConversationService:
         finally:
             await client.close()
 
+        message = completion.message
         reply, tagged_reasoning = pop_reasoning_content(getattr(message, "content", None))
         reasoning = getattr(message, "reasoning_content", None) or tagged_reasoning
         assistant_message: dict[str, Any] = {"role": "assistant", "content": reply or ""}
@@ -143,8 +145,8 @@ class ConversationService:
 
         if state.output_reasoning_content and reasoning:
             await self._send_reasoning(context_id, is_group, event, reasoning)
-        if reply:
-            await send_split_messages(self.sender, reply)
+        if reply and not completion.streamed:
+            await send_reply_messages(self.sender, reply)
         await self._send_images(reply_images)
 
     async def _complete(
@@ -152,13 +154,34 @@ class ConversationService:
         client: AsyncOpenAI,
         request_config: dict[str, Any],
         messages: list[dict[str, Any]],
-    ) -> Any:
-        response = await cast(Any, client.chat.completions.create)(**request_config, messages=messages)
-        if not response.choices:
-            raise RuntimeError("API响应中没有choices")
-        if response.usage is not None:
-            logger.debug(f"API响应token数：{response.usage.total_tokens}")
-        return response.choices[0].message
+        *,
+        stream: bool,
+    ) -> CompletionResult:
+        completion_config = dict(request_config)
+        if stream:
+            completion_config["stream"] = True
+        response = await cast(Any, client.chat.completions.create)(**completion_config, messages=messages)
+        if not stream:
+            if not response.choices:
+                raise RuntimeError("API响应中没有choices")
+            if response.usage is not None:
+                logger.debug(f"API响应token数：{response.usage.total_tokens}")
+            return CompletionResult(message=response.choices[0].message)
+
+        builder = StreamedMessageBuilder()
+        emitter = StreamingReplyEmitter(self._send_stream_segment)
+        async for chunk in response:
+            content_fragment = builder.add_chunk(chunk)
+            if content_fragment:
+                await emitter.feed(content_fragment)
+        await emitter.finish()
+        if builder.usage is not None:
+            logger.debug(f"API流式响应token数：{builder.usage.total_tokens}")
+        return CompletionResult(message=builder.build(), streamed=True)
+
+    async def _send_stream_segment(self, content: str) -> None:
+        logger.debug(f"流式消息完成，立即发送：{content[:50]}")
+        await self.sender(Message(content))
 
     async def _run_tool_loop(
         self,
@@ -171,16 +194,17 @@ class ConversationService:
         transcript: list[dict[str, Any]],
         event: ChatEvent,
         is_group: bool,
-    ) -> Any:
-        message = await self._complete(client, request_config, messages + transcript)
+    ) -> CompletionResult:
+        completion = await self._complete(client, request_config, messages + transcript, stream=preset.stream)
+        message = completion.message
         if not preset.support_mcp:
-            return message
+            return completion
 
         call_counts: Counter[str] = Counter()
         for round_number in range(1, self.config.max_tool_rounds + 1):
             tool_calls = getattr(message, "tool_calls", None)
             if not tool_calls:
-                return message
+                return completion
             logger.info(f"处理第 {round_number}/{self.config.max_tool_rounds} 轮工具调用")
             assistant_reply: dict[str, Any] = {
                 "role": "assistant",
@@ -191,8 +215,8 @@ class ConversationService:
             if preset.request_with_reasoning_content and reasoning is not None:
                 assistant_reply["reasoning_content"] = reasoning
             transcript.append(assistant_reply)
-            if getattr(message, "content", None):
-                await send_split_messages(self.sender, message.content)
+            if getattr(message, "content", None) and not completion.streamed:
+                await send_reply_messages(self.sender, message.content)
 
             for tool_call in tool_calls:
                 await self._handle_tool_call(
@@ -203,10 +227,11 @@ class ConversationService:
                     event,
                     is_group,
                 )
-            message = await self._complete(client, request_config, messages + transcript)
+            completion = await self._complete(client, request_config, messages + transcript, stream=preset.stream)
+            message = completion.message
 
         if not getattr(message, "tool_calls", None):
-            return message
+            return completion
         logger.warning(f"工具调用达到上限 {self.config.max_tool_rounds}，强制要求模型总结")
         final_config = {key: value for key, value in request_config.items() if key not in {"tools", "tool_choice"}}
         final_messages = [
@@ -217,7 +242,7 @@ class ConversationService:
                 "content": "工具调用次数已达上限。不得再调用工具，请根据已有结果直接给出最终回答。",
             },
         ]
-        return await self._complete(client, final_config, final_messages)
+        return await self._complete(client, final_config, final_messages, stream=preset.stream)
 
     async def _handle_tool_call(
         self,

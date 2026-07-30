@@ -10,6 +10,8 @@ import httpx
 from nonebot import logger
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message, PrivateMessageEvent
 
+from .output_protocol import parse_reply_segments
+
 ChatEvent = GroupMessageEvent | PrivateMessageEvent
 MessageSender = Callable[[Message], Awaitable[object]]
 
@@ -71,9 +73,9 @@ async def download_images(event: ChatEvent) -> list[str]:
     return images
 
 
-async def send_split_messages(sender: MessageSender, content: str) -> None:
-    segments = [segment.strip() for segment in content.split("<botbr>") if segment.strip()]
-    logger.info(f"准备发送分段消息，分段数：{len(segments)}")
+async def send_reply_messages(sender: MessageSender, content: str) -> None:
+    segments = parse_reply_segments(content)
+    logger.info(f"准备发送解析后的消息，消息数：{len(segments)}")
     for index, segment in enumerate(segments):
         if index:
             await asyncio.sleep(2)

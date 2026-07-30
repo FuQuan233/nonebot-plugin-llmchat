@@ -161,6 +161,7 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 | proxy | 否 | 无 | 请求API时使用的HTTP代理 |
 | support_mcp | 否 | False | 是否支持MCP协议 |
 | support_image | 否 | False | 是否支持图片输入 |
+| stream | 否 | False | 是否启用流式响应；普通行完成后立即发送，三反引号内容框闭合后整体发送 |
 | extra_body | 否 | {} | 额外的请求体字段，用于兼容不同API的特殊参数 |
 | request_with_reasoning_content | 否 | false | 请求中是否包含推理过程内容（部分模型要求进行了工具调用后，必须完整回传推理过程给API） |
 
@@ -278,6 +279,8 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 - `state.py`：群聊/私聊状态与预设选择。
 - `dispatcher.py`：每会话单 worker 的可靠队列调度。
 - `conversation.py`：LLM 请求、有限工具循环和回复发送。
+- `output_protocol.py`：按行回复、长文本/代码内容框保护与静默回复协议。
+- `streaming.py`：流式响应聚合、普通行即时发送、长文本/代码内容框整体发送和工具调用增量重组。
 - `message_utils.py` 与 `prompts.py`：消息转换、图片处理和提示词构建。
 - `mcpclient.py` 与 `onebottools.py`：外部 MCP 和 OneBot 工具适配。
 - `persistence.py`：带锁和原子替换的状态持久化。
