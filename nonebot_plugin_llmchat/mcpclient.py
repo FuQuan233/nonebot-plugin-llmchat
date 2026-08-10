@@ -43,7 +43,7 @@ class MCPClient:
         self,
         server_config: dict[str, MCPServerConfig] | None = None,
         default_command_cwd: str | None = None,
-        operation_timeout: int = 30,
+        operation_timeout: int = 100,
     ):
         if self._initialized:
             return
