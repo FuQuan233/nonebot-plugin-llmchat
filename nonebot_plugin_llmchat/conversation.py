@@ -67,6 +67,8 @@ class ConversationService:
             "api_key": preset.api_key,
             "timeout": self.config.request_timeout,
         }
+        if preset.user_agent:
+            options["default_headers"] = {"User-Agent": preset.user_agent}
         if preset.proxy:
             options["http_client"] = httpx.AsyncClient(proxy=preset.proxy)
         return AsyncOpenAI(**options)

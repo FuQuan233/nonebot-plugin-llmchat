@@ -159,6 +159,7 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 | max_tokens | 否 | 2048 | 最大响应token数 |
 | temperature | 否 | 0.7 | 生成温度 |
 | proxy | 否 | 无 | 请求API时使用的HTTP代理 |
+| user_agent | 否 | 无 | 请求API时使用的自定义User-Agent |
 | support_mcp | 否 | False | 是否支持MCP协议 |
 | support_image | 否 | False | 是否支持图片输入 |
 | stream | 否 | False | 是否启用流式响应；普通行完成后立即发送，三反引号内容框闭合后整体发送 |

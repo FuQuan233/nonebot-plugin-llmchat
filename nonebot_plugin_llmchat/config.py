@@ -11,6 +11,7 @@ class PresetConfig(BaseModel):
     max_tokens: int = Field(default=2048, description="最大响应token数")
     temperature: float = Field(default=0.7, description="生成温度（0-2]")
     proxy: str = Field(default="", description="HTTP代理服务器")
+    user_agent: str = Field(default="", description="请求API时使用的自定义User-Agent")
     support_mcp: bool = Field(default=False, description="是否支持MCP")
     support_image: bool = Field(default=False, description="是否支持图片输入")
     stream: bool = Field(default=False, description="是否使用流式响应")
