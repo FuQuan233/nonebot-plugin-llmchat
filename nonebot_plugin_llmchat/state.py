@@ -5,15 +5,15 @@ import time
 from typing import Any
 
 from .config import PresetConfig, ScopedConfig
+from .memory import ConversationTurn, flatten_turns
 
 
 @dataclass
 class ChatState:
     preset_name: str
-    history_size: int
     past_events_size: int
     random_trigger_prob: float = 0.0
-    history: deque[dict[str, Any]] = field(init=False)
+    turns: deque[ConversationTurn] = field(default_factory=deque)
     pending_events: deque[Any] = field(init=False)
     queue: asyncio.Queue[Any] = field(default_factory=asyncio.Queue)
     worker_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -21,10 +21,28 @@ class ChatState:
     last_active: float = field(default_factory=time.time)
     prompt: str | None = None
     output_reasoning_content: bool = False
+    memory_summary: str | None = None
+    last_prompt_tokens: int | None = None
+    last_cached_tokens: int | None = None
+    usage_preset_name: str | None = None
 
     def __post_init__(self) -> None:
-        self.history = deque(maxlen=self.history_size * 2)
         self.pending_events = deque(maxlen=self.past_events_size)
+
+    @property
+    def history(self) -> list[dict[str, Any]]:
+        """兼容旧版只读扁平历史访问。"""
+        return flatten_turns(list(self.turns))
+
+    def clear_memory(self) -> None:
+        self.turns.clear()
+        self.memory_summary = None
+        self.clear_usage()
+
+    def clear_usage(self) -> None:
+        self.last_prompt_tokens = None
+        self.last_cached_tokens = None
+        self.usage_preset_name = None
 
 
 class StateStore:
@@ -35,17 +53,15 @@ class StateStore:
 
     def _new_group_state(self) -> ChatState:
         return ChatState(
-            self.config.default_preset,
-            self.config.history_size,
-            self.config.past_events_size,
-            self.config.random_trigger_prob,
+            preset_name=self.config.default_preset,
+            past_events_size=self.config.past_events_size,
+            random_trigger_prob=self.config.random_trigger_prob,
         )
 
     def _new_private_state(self) -> ChatState:
         return ChatState(
-            self.config.private_chat_preset,
-            self.config.history_size,
-            self.config.past_events_size,
+            preset_name=self.config.private_chat_preset,
+            past_events_size=self.config.past_events_size,
         )
 
     def get(self, context_id: int, is_group: bool) -> ChatState:

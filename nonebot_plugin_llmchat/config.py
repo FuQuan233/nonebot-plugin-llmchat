@@ -9,6 +9,9 @@ class PresetConfig(BaseModel):
     api_key: str = Field(..., description="API密钥")
     model_name: str = Field(..., description="模型名称")
     max_tokens: int = Field(default=2048, description="最大响应token数")
+    context_window: int | None = Field(default=None, ge=1024, description="模型上下文窗口大小")
+    auto_detect_context_window: bool = Field(default=True, description="是否尝试从模型元数据获取上下文窗口")
+    stream_include_usage: bool = Field(default=True, description="流式请求是否要求返回token用量")
     temperature: float = Field(default=0.7, description="生成温度（0-2]")
     proxy: str = Field(default="", description="HTTP代理服务器")
     user_agent: str = Field(default="", description="请求API时使用的自定义User-Agent")
@@ -47,8 +50,13 @@ class ScopedConfig(BaseModel):
     """LLM Chat Plugin配置。"""
 
     api_presets: list[PresetConfig] = Field(..., description="API预设列表")
-    history_size: int = Field(default=20, ge=1, description="LLM上下文消息保留数量")
     past_events_size: int = Field(default=10, ge=1, description="触发时发送的消息数量")
+    context_compression_enabled: bool = Field(default=True, description="是否启用上下文压缩")
+    context_compression_trigger_ratio: float = Field(default=0.85, gt=0.0, le=1.0, description="上下文压缩触发比例")
+    context_compression_target_ratio: float = Field(default=0.6, gt=0.0, le=1.0, description="上下文压缩目标比例")
+    context_safety_tokens: int = Field(default=1024, ge=0, description="上下文预留token数")
+    compression_max_tokens: int = Field(default=1024, ge=128, description="压缩摘要最大输出token数")
+    compression_keep_recent_turns: int = Field(default=6, ge=1, description="压缩时至少保留的最近对话轮数")
     request_timeout: int = Field(default=30, ge=1, description="API请求超时时间（秒）")
     max_tool_rounds: int = Field(default=8, ge=1, le=50, description="最大工具调用轮数")
     max_repeated_tool_calls: int = Field(default=2, ge=1, le=10, description="相同工具调用最多执行次数")
@@ -68,6 +76,8 @@ class ScopedConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_presets(self):
+        if self.context_compression_target_ratio >= self.context_compression_trigger_ratio:
+            raise ValueError("context_compression_target_ratio 必须小于 context_compression_trigger_ratio")
         names = [preset.name for preset in self.api_presets]
         if not names:
             raise ValueError("api_presets 至少需要一个预设")

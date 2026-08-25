@@ -39,7 +39,9 @@ def register_commands(config: ScopedConfig, states: StateStore) -> None:
         if not preset_name or preset_name not in available | {"off"}:
             names = "\n- ".join(sorted(available))
             await preset_handler.finish(f"当前API预设：{state.preset_name}\n可用API预设：\n- {names}")
-        state.preset_name = preset_name
+        if state.preset_name != preset_name:
+            state.preset_name = preset_name
+            state.clear_usage()
         if target_id is not None:
             kind = "群聊" if is_group_target else "私聊"
             await preset_handler.finish(f"已将 {kind} {target_id} 切换至API预设：{preset_name}")
@@ -58,6 +60,7 @@ def register_commands(config: ScopedConfig, states: StateStore) -> None:
         if state is None:
             return
         state.prompt = args.extract_plain_text().strip()
+        state.clear_usage()
         await edit_handler.finish("修改成功")
 
     reset_handler = on_command(
@@ -73,7 +76,7 @@ def register_commands(config: ScopedConfig, states: StateStore) -> None:
         if state is None:
             return
         state.pending_events.clear()
-        state.history.clear()
+        state.clear_memory()
         await reset_handler.finish("记忆已清空")
 
     probability_handler = on_command(

@@ -10,7 +10,9 @@ from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message, MessageSegme
 from openai import AsyncOpenAI
 
 from .config import PresetConfig, ScopedConfig
+from .context_manager import ContextManager
 from .mcpclient import MCPClient
+from .memory import ConversationTurn
 from .message_utils import (
     ChatEvent,
     MessageSender,
@@ -37,6 +39,7 @@ class ConversationService:
         self.states = states
         self.bot_names = bot_names
         self.sender = sender
+        self.context_manager = ContextManager(config)
 
     async def process_event(
         self,
@@ -94,12 +97,6 @@ class ConversationService:
             is_group=is_group,
             support_tools=preset.support_mcp,
         )
-        while state.history and state.history[0].get("role") != "user":
-            state.history.popleft()
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_prompt},
-            *list(state.history)[-self.config.history_size * 2 :],
-        ]
         content: list[dict[str, Any]] = []
         bot_name = next(iter(sorted(self.bot_names)), "机器人")
         for pending_event in events:
@@ -108,48 +105,74 @@ class ConversationService:
                 for image in await download_images(pending_event):
                     content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image}"}})
         transcript: list[dict[str, Any]] = [{"role": "user", "content": content}]
-        request_config: dict[str, Any] = {
-            "model": preset.model_name,
-            "max_tokens": preset.max_tokens,
-            "temperature": preset.temperature,
-            "timeout": self.config.request_timeout,
-            "extra_body": preset.extra_body,
-        }
+        request_config = self._build_request_config(preset)
         if preset.support_mcp:
             request_config["tools"] = await mcp_client.get_available_tools(is_group)
 
         client = self._create_client(preset)
         try:
-            completion = await self._run_tool_loop(
-                client=client,
-                preset=preset,
-                mcp_client=mcp_client,
-                request_config=request_config,
-                messages=messages,
-                transcript=transcript,
-                event=event,
-                is_group=is_group,
-            )
+            context_window = await self.context_manager.resolve_context_window(client, preset)
+            messages = self.context_manager.build_messages(system_prompt, state)
+            try:
+                completion = await self._run_tool_loop(
+                    client=client,
+                    preset=preset,
+                    mcp_client=mcp_client,
+                    request_config=request_config,
+                    messages=messages,
+                    transcript=transcript,
+                    event=event,
+                    is_group=is_group,
+                )
+            except Exception as error:
+                if not self.context_manager.is_context_overflow(error) or any(item.get("role") == "tool" for item in transcript):
+                    raise
+                compressed = await self.context_manager.compress(
+                    client,
+                    preset,
+                    state,
+                    context_window=context_window,
+                    force=True,
+                )
+                if not compressed:
+                    raise
+                logger.warning(f"会话 {context_id} 超出上下文限制，压缩记忆后重试")
+                messages = self.context_manager.build_messages(system_prompt, state)
+                completion = await self._run_tool_loop(
+                    client=client,
+                    preset=preset,
+                    mcp_client=mcp_client,
+                    request_config=request_config,
+                    messages=messages,
+                    transcript=transcript,
+                    event=event,
+                    is_group=is_group,
+                )
+
+            message = completion.message
+            reply, tagged_reasoning = pop_reasoning_content(getattr(message, "content", None))
+            reasoning = getattr(message, "reasoning_content", None) or tagged_reasoning
+            assistant_message: dict[str, Any] = {"role": "assistant", "content": reply or ""}
+            reply_images = getattr(message, "images", None)
+            if reply_images:
+                assistant_message["images"] = reply_images
+            if preset.request_with_reasoning_content:
+                assistant_message["reasoning_content"] = reasoning
+            transcript.append(assistant_message)
+            state.turns.append(ConversationTurn(transcript))
+            self.context_manager.record_usage(state, preset, completion.usage)
+
+            if state.output_reasoning_content and reasoning:
+                await self._send_reasoning(context_id, is_group, event, reasoning)
+            if reply and not completion.streamed:
+                await send_reply_messages(self.sender, reply)
+            await self._send_images(reply_images)
+            try:
+                await self.context_manager.maybe_compress(client, preset, state, context_window)
+            except Exception:
+                logger.exception(f"会话 {context_id} 上下文压缩失败，将保留原始记忆")
         finally:
             await client.close()
-
-        message = completion.message
-        reply, tagged_reasoning = pop_reasoning_content(getattr(message, "content", None))
-        reasoning = getattr(message, "reasoning_content", None) or tagged_reasoning
-        assistant_message: dict[str, Any] = {"role": "assistant", "content": reply or ""}
-        reply_images = getattr(message, "images", None)
-        if reply_images:
-            assistant_message["images"] = reply_images
-        if preset.request_with_reasoning_content:
-            assistant_message["reasoning_content"] = reasoning
-        transcript.append(assistant_message)
-        state.history.extend(transcript)
-
-        if state.output_reasoning_content and reasoning:
-            await self._send_reasoning(context_id, is_group, event, reasoning)
-        if reply and not completion.streamed:
-            await send_reply_messages(self.sender, reply)
-        await self._send_images(reply_images)
 
     async def _complete(
         self,
@@ -167,8 +190,8 @@ class ConversationService:
             if not response.choices:
                 raise RuntimeError("API响应中没有choices")
             if response.usage is not None:
-                logger.debug(f"API响应token数：{response.usage.total_tokens}")
-            return CompletionResult(message=response.choices[0].message)
+                logger.debug(f"API响应token数：{self._value(response.usage, 'total_tokens')}")
+            return CompletionResult(message=response.choices[0].message, usage=response.usage)
 
         builder = StreamedMessageBuilder()
         emitter = StreamingReplyEmitter(self._send_stream_segment)
@@ -178,8 +201,24 @@ class ConversationService:
                 await emitter.feed(content_fragment)
         await emitter.finish()
         if builder.usage is not None:
-            logger.debug(f"API流式响应token数：{builder.usage.total_tokens}")
-        return CompletionResult(message=builder.build(), streamed=True)
+            logger.debug(f"API流式响应token数：{self._value(builder.usage, 'total_tokens')}")
+        return CompletionResult(message=builder.build(), streamed=True, usage=builder.usage)
+
+    @staticmethod
+    def _value(value: Any, key: str) -> Any:
+        return value.get(key) if isinstance(value, dict) else getattr(value, key, None)
+
+    def _build_request_config(self, preset: PresetConfig) -> dict[str, Any]:
+        request_config: dict[str, Any] = {
+            "model": preset.model_name,
+            "max_tokens": preset.max_tokens,
+            "temperature": preset.temperature,
+            "timeout": self.config.request_timeout,
+            "extra_body": preset.extra_body,
+        }
+        if preset.stream and preset.stream_include_usage:
+            request_config["stream_options"] = {"include_usage": True}
+        return request_config
 
     async def _send_stream_segment(self, content: str) -> None:
         logger.debug(f"流式消息完成，立即发送：{content[:50]}")

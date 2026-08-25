@@ -19,7 +19,7 @@ class DispatcherTests(unittest.IsolatedAsyncioTestCase):
                 started.set()
                 await release.wait()
 
-        state = ChatState("test", 10, 10)
+        state = ChatState(preset_name="test", past_events_size=10)
         dispatcher = MessageDispatcher(process)
         await dispatcher.enqueue(1, True, state, "first")
         await asyncio.wait_for(started.wait(), timeout=1)
@@ -39,7 +39,7 @@ class DispatcherTests(unittest.IsolatedAsyncioTestCase):
             if event == "bad":
                 raise RuntimeError("boom")
 
-        state = ChatState("test", 10, 10)
+        state = ChatState(preset_name="test", past_events_size=10)
         dispatcher = MessageDispatcher(process)
         await dispatcher.enqueue(1, True, state, "bad")
         await dispatcher.enqueue(1, True, state, "good")

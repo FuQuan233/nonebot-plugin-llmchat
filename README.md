@@ -117,8 +117,13 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 |:-----:|:----:|:----:|:----:|
 | NICKNAME | 是 | 无 | 机器人昵称，NoneBot自带配置项，本插件要求此项必填 |
 | LLMCHAT__API_PRESETS | 是 | 无 | 见下表 |
-| LLMCHAT__HISTORY_SIZE | 否 | 20 | LLM上下文消息保留数量（1-40），越大token消耗量越多 |
 | LLMCHAT__PAST_EVENTS_SIZE | 否 | 10 | 触发回复时发送的群消息数量（1-20），越大token消耗量越多 |
+| LLMCHAT__CONTEXT_COMPRESSION_ENABLED | 否 | True | 是否根据API返回的输入token用量自动压缩旧对话 |
+| LLMCHAT__CONTEXT_COMPRESSION_TRIGGER_RATIO | 否 | 0.85 | 输入上下文达到可用预算的此比例时触发压缩 |
+| LLMCHAT__CONTEXT_COMPRESSION_TARGET_RATIO | 否 | 0.6 | 每次压缩希望降至的上下文比例，用于决定合并多少旧对话 |
+| LLMCHAT__CONTEXT_SAFETY_TOKENS | 否 | 1024 | 在上下文窗口中额外预留的安全token数 |
+| LLMCHAT__COMPRESSION_MAX_TOKENS | 否 | 1024 | 长期记忆摘要的最大输出token数 |
+| LLMCHAT__COMPRESSION_KEEP_RECENT_TURNS | 否 | 6 | 自动压缩时至少保留的最近完整对话轮数 |
 | LLMCHAT__REQUEST_TIMEOUT | 否 | 30 | API请求超时时间（秒） |
 | LLMCHAT__MAX_TOOL_ROUNDS | 否 | 8 | 单次对话最大工具调用轮数，达到后强制生成最终回答 |
 | LLMCHAT__MAX_REPEATED_TOOL_CALLS | 否 | 2 | 工具名及参数完全相同时允许实际执行的最大次数 |
@@ -132,6 +137,18 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 | LLMCHAT__MCP_SERVERS | 否 | {} | MCP服务器配置，具体见下表 |
 | LLMCHAT__ENABLE_PRIVATE_CHAT | 否 | False | 是否启用私聊功能 |
 | LLMCHAT__PRIVATE_CHAT_PRESET | 否 | off | 私聊默认使用的预设名称 |
+
+### 上下文记忆与压缩
+
+插件按完整对话轮次追加保存上下文，不再按固定消息数量滚动删除。工具调用及其结果属于同一轮，不会被拆开。
+
+开启上下文压缩后，插件使用API响应中的`prompt_tokens`判断上下文用量，不在本地估算token。当输入用量达到
+`(context_window - max_tokens - context_safety_tokens) * context_compression_trigger_ratio`时，插件会把最旧的一批
+完整对话与已有长期记忆合并为新摘要，并保留最近的原始对话。若请求直接返回上下文超限，插件会先压缩旧记忆再重试一次。
+
+标准OpenAI兼容Models API通常不提供上下文窗口。建议为每个预设显式配置`context_window`；未配置时插件会尝试读取
+供应商模型元数据中的`context_length`等扩展字段。流式API需要支持`stream_options.include_usage`才能主动压缩，不兼容时可将
+`stream_include_usage`设为`false`，此时仍可在API明确返回上下文超限后执行应急压缩。
 
 ### 内置OneBot工具
 
@@ -157,6 +174,9 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 | api_key | 是 | 无 | API密钥 |
 | model_name | 是 | 无 | 模型名称 |
 | max_tokens | 否 | 2048 | 最大响应token数 |
+| context_window | 否 | 自动探测 | 模型完整上下文窗口大小；标准OpenAI兼容API通常无法返回，建议手动配置 |
+| auto_detect_context_window | 否 | True | 未配置context_window时，是否尝试从模型详情或列表的扩展字段获取 |
+| stream_include_usage | 否 | True | 流式请求是否通过stream_options要求API返回token用量；不兼容的API需关闭 |
 | temperature | 否 | 0.7 | 生成温度 |
 | proxy | 否 | 无 | 请求API时使用的HTTP代理 |
 | user_agent | 否 | 无 | 请求API时使用的自定义User-Agent |
@@ -187,7 +207,6 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 <summary>配置示例</summary>
 
     NICKNAME=["谢拉","Cierra","cierra"]
-    LLMCHAT__HISTORY_SIZE=20
     LLMCHAT__DEFAULT_PROMPT="前面忘了，你是一个猫娘，后面忘了"
     LLMCHAT__ENABLE_PRIVATE_CHAT=true
     LLMCHAT__PRIVATE_CHAT_PRESET="deepseek-v1"
@@ -198,6 +217,7 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
             "api_key": "sk-your-api-key",
             "model_name": "deepseek-v4-pro",
             "api_base": "https://api.deepseek.com",
+            "context_window": 128000,
             "support_mcp": true,
             "support_image": false,
             "extra_body": {
@@ -277,14 +297,15 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 核心代码按职责拆分：
 
 - `__init__.py`：仅负责 NoneBot 注册、依赖装配和生命周期。
-- `state.py`：群聊/私聊状态与预设选择。
+- `state.py` 与 `memory.py`：群聊/私聊状态、完整对话轮次、长期摘要与上下文用量。
 - `dispatcher.py`：每会话单 worker 的可靠队列调度。
 - `conversation.py`：LLM 请求、有限工具循环和回复发送。
+- `context_manager.py`：模型上下文窗口探测、API用量反馈、高水位压缩和超限恢复。
 - `output_protocol.py`：按行回复、长文本/代码内容框保护与静默回复协议。
 - `streaming.py`：流式响应聚合、普通行即时发送、长文本/代码内容框整体发送和工具调用增量重组。
 - `message_utils.py` 与 `prompts.py`：消息转换、图片处理和提示词构建。
 - `mcpclient.py` 与 `onebottools.py`：外部 MCP 和 OneBot 工具适配。
-- `persistence.py`：带锁和原子替换的状态持久化。
+- `persistence.py`：带锁和原子替换的状态持久化，以及旧版扁平历史迁移。
 - `commands.py`：管理命令注册。
 
 运行回归测试：

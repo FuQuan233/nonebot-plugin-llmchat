@@ -15,6 +15,7 @@ _THINK_CLOSE = "</think>"
 class CompletionResult:
     message: Any
     streamed: bool = False
+    usage: Any = None
 
 
 @dataclass
