@@ -4,6 +4,13 @@ from pathlib import Path
 import sys
 from types import ModuleType
 
+import nonebot
+
+try:
+    nonebot.get_driver()
+except ValueError:
+    nonebot.init(driver="~none")
+
 PACKAGE_NAME = "nonebot_plugin_llmchat"
 if PACKAGE_NAME not in sys.modules:
     package = ModuleType(PACKAGE_NAME)

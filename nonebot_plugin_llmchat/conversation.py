@@ -1,6 +1,7 @@
 import asyncio
 import base64
 from collections import Counter
+from collections.abc import Awaitable, Callable
 import json
 from typing import Any, cast
 
@@ -12,7 +13,7 @@ from openai import AsyncOpenAI
 from .config import PresetConfig, ScopedConfig
 from .context_manager import ContextManager
 from .mcpclient import MCPClient
-from .memory import ConversationTurn
+from .memory import ConversationTurn, prune_old_turn_images
 from .message_utils import (
     ChatEvent,
     MessageSender,
@@ -26,6 +27,8 @@ from .prompts import build_system_prompt
 from .state import ChatState, StateStore
 from .streaming import CompletionResult, StreamedMessageBuilder, StreamingReplyEmitter
 
+StateSaver = Callable[[int, bool, ChatState], Awaitable[None]]
+
 
 class ConversationService:
     def __init__(
@@ -34,11 +37,13 @@ class ConversationService:
         states: StateStore,
         bot_names: set[str],
         sender: MessageSender,
+        save_state: StateSaver | None = None,
     ) -> None:
         self.config = config
         self.states = states
         self.bot_names = bot_names
         self.sender = sender
+        self._save_state = save_state
         self.context_manager = ContextManager(config)
 
     async def process_event(
@@ -63,6 +68,12 @@ class ConversationService:
             state.pending_events.extendleft(reversed(snapshot))
             logger.opt(exception=error).error(f"API请求失败 会话：{context_id}")
             await self.sender(Message(f"服务暂时不可用，请稍后再试\n{error!s}"))
+        finally:
+            if self._save_state is not None:
+                try:
+                    await self._save_state(context_id, is_group, state)
+                except Exception:
+                    logger.exception(f"实时保存会话 {context_id} 失败")
 
     def _create_client(self, preset: PresetConfig) -> AsyncOpenAI:
         options: dict[str, Any] = {
@@ -108,6 +119,10 @@ class ConversationService:
         request_config = self._build_request_config(preset)
         if preset.support_mcp:
             request_config["tools"] = await mcp_client.get_available_tools(is_group)
+
+        removed_images = prune_old_turn_images(state.turns, keep_recent_turns=1)
+        if removed_images:
+            logger.info(f"会话 {context_id} 已清理{removed_images}张旧历史图片，仅保留上一轮图片")
 
         client = self._create_client(preset)
         try:

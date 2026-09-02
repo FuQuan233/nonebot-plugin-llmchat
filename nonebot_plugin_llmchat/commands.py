@@ -1,3 +1,5 @@
+from collections.abc import Awaitable, Callable
+
 from nonebot import on_command
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message, PrivateMessageEvent
 from nonebot.adapters.onebot.v11.permission import GROUP_ADMIN, GROUP_OWNER, PRIVATE
@@ -6,6 +8,8 @@ from nonebot.permission import SUPERUSER
 
 from .config import ScopedConfig
 from .state import ChatState, StateStore
+
+StateSaver = Callable[[int, bool, ChatState], Awaitable[None]]
 
 
 def _event_state(config: ScopedConfig, states: StateStore, event) -> ChatState | None:
@@ -16,7 +20,7 @@ def _event_state(config: ScopedConfig, states: StateStore, event) -> ChatState |
     return None
 
 
-def register_commands(config: ScopedConfig, states: StateStore) -> None:
+def register_commands(config: ScopedConfig, states: StateStore, save_state: StateSaver) -> None:
     preset_handler = on_command("API预设", priority=1, block=True, permission=SUPERUSER)
 
     @preset_handler.handle()
@@ -39,9 +43,17 @@ def register_commands(config: ScopedConfig, states: StateStore) -> None:
         if not preset_name or preset_name not in available | {"off"}:
             names = "\n- ".join(sorted(available))
             await preset_handler.finish(f"当前API预设：{state.preset_name}\n可用API预设：\n- {names}")
-        if state.preset_name != preset_name:
+        changed = state.preset_name != preset_name
+        if changed:
             state.preset_name = preset_name
             state.clear_usage()
+            if target_id is not None:
+                context_id = target_id
+            elif isinstance(event, GroupMessageEvent):
+                context_id = event.group_id
+            else:
+                context_id = event.user_id
+            await save_state(context_id, is_group_target, state)
         if target_id is not None:
             kind = "群聊" if is_group_target else "私聊"
             await preset_handler.finish(f"已将 {kind} {target_id} 切换至API预设：{preset_name}")
@@ -61,6 +73,8 @@ def register_commands(config: ScopedConfig, states: StateStore) -> None:
             return
         state.prompt = args.extract_plain_text().strip()
         state.clear_usage()
+        is_group = isinstance(event, GroupMessageEvent)
+        await save_state(event.group_id if is_group else event.user_id, is_group, state)
         await edit_handler.finish("修改成功")
 
     reset_handler = on_command(
@@ -77,6 +91,8 @@ def register_commands(config: ScopedConfig, states: StateStore) -> None:
             return
         state.pending_events.clear()
         state.clear_memory()
+        is_group = isinstance(event, GroupMessageEvent)
+        await save_state(event.group_id if is_group else event.user_id, is_group, state)
         await reset_handler.finish("记忆已清空")
 
     probability_handler = on_command(
@@ -95,7 +111,9 @@ def register_commands(config: ScopedConfig, states: StateStore) -> None:
         except ValueError as error:
             await probability_handler.finish(f"输入有误，请使用 [0,1] 的浮点数\n{error!s}")
             return
-        states.group_states[event.group_id].random_trigger_prob = probability
+        state = states.group_states[event.group_id]
+        state.random_trigger_prob = probability
+        await save_state(event.group_id, True, state)
         await probability_handler.finish(f"主动回复概率已设为 {probability}")
 
     think_handler = on_command(
@@ -111,5 +129,7 @@ def register_commands(config: ScopedConfig, states: StateStore) -> None:
         if state is None:
             return
         state.output_reasoning_content = not state.output_reasoning_content
+        is_group = isinstance(event, GroupMessageEvent)
+        await save_state(event.group_id if is_group else event.user_id, is_group, state)
         status = "开启" if state.output_reasoning_content else "关闭"
         await think_handler.finish(f"已{status}思维输出")

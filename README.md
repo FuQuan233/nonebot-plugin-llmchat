@@ -55,8 +55,9 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
    - 灵活的权限配置
 
 1. **分群聊上下文记忆管理**
-   - 分群聊保留对话历史记录（可配置保留条数）
+   - 分群聊保留完整对话轮次，并按上下文用量自动压缩长期记忆
    - 自动合并未处理消息，降低API用量
+   - 使用`nonebot-plugin-datastore`实时保存会话状态
    - 支持`记忆清除`命令手动重置对话上下文
 
 1. **分段回复支持**
@@ -141,6 +142,7 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 ### 上下文记忆与压缩
 
 插件按完整对话轮次追加保存上下文，不再按固定消息数量滚动删除。工具调用及其结果属于同一轮，不会被拆开。
+图片原始数据只会在当前轮次和上一轮次中发送；更早轮次的图片会替换为文字占位，避免长期重复上传大量base64数据。
 
 开启上下文压缩后，插件使用API响应中的`prompt_tokens`判断上下文用量，不在本地估算token。当输入用量达到
 `(context_window - max_tokens - context_safety_tokens) * context_compression_trigger_ratio`时，插件会把最旧的一批
@@ -149,6 +151,14 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 标准OpenAI兼容Models API通常不提供上下文窗口。建议为每个预设显式配置`context_window`；未配置时插件会尝试读取
 供应商模型元数据中的`context_length`等扩展字段。流式API需要支持`stream_options.include_usage`才能主动压缩，不兼容时可将
 `stream_include_usage`设为`false`，此时仍可在API明确返回上下文超限后执行应急压缩。
+
+### 数据持久化
+
+群聊和私聊状态通过`nonebot-plugin-datastore`保存到数据库，每次对话处理结束或管理命令修改状态后立即提交，不使用定时保存任务。会话元数据使用独立字段保存，完整对话轮次存放在关联表中；新增对话只插入新轮次，图片清理只更新受影响轮次，上下文压缩或清空只删除被移除的轮次。
+数据库连接可使用 datastore 的`DATASTORE_DATABASE_URL`等配置项调整，未配置时使用其默认SQLite数据库。
+
+从旧版本升级时，插件会在数据库初始化后自动导入原有`llmchat_state.json`和`llmchat_private_state.json`。导入成功后，旧文件会
+改名为以`.migrated`结尾的备份，不会继续参与读写。
 
 ### 内置OneBot工具
 
@@ -305,7 +315,7 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 - `streaming.py`：流式响应聚合、普通行即时发送、长文本/代码内容框整体发送和工具调用增量重组。
 - `message_utils.py` 与 `prompts.py`：消息转换、图片处理和提示词构建。
 - `mcpclient.py` 与 `onebottools.py`：外部 MCP 和 OneBot 工具适配。
-- `persistence.py`：带锁和原子替换的状态持久化，以及旧版扁平历史迁移。
+- `models.py`、`migrations/`与`persistence.py`：datastore数据库模型、迁移、实时持久化和旧JSON数据导入。
 - `commands.py`：管理命令注册。
 
 运行回归测试：

@@ -5,19 +5,17 @@ from nonebot.adapters.onebot.v11 import GroupMessageEvent, PrivateMessageEvent
 from nonebot.plugin import PluginMetadata
 from nonebot.rule import Rule
 
+require("nonebot_plugin_datastore")
+from nonebot_plugin_datastore.db import post_db_init
+
 from .commands import register_commands
 from .config import Config
 from .conversation import ConversationService
 from .dispatcher import MessageDispatcher
 from .mcpclient import MCPClient
+from .models import plugin_data
 from .persistence import StatePersistence
 from .state import StateStore
-
-require("nonebot_plugin_localstore")
-import nonebot_plugin_localstore as store
-
-require("nonebot_plugin_apscheduler")
-from nonebot_plugin_apscheduler import scheduler
 
 __plugin_meta__ = PluginMetadata(
     name="llmchat",
@@ -32,6 +30,12 @@ __plugin_meta__ = PluginMetadata(
 plugin_config = get_plugin_config(Config).llmchat
 driver = get_driver()
 states = StateStore(plugin_config)
+state_persistence = StatePersistence(
+    plugin_config,
+    states,
+    plugin_data.data_dir / "llmchat_state.json",
+    plugin_data.data_dir / "llmchat_private_state.json",
+)
 
 # 保留旧版公开名称，避免依赖插件内部状态的代码立即失效。
 group_states = states.group_states
@@ -61,6 +65,7 @@ conversation = ConversationService(
     states=states,
     bot_names=set(driver.config.nickname),
     sender=handler.send,
+    save_state=state_persistence.save_state,
 )
 message_dispatcher = MessageDispatcher(conversation.process_event)
 
@@ -76,31 +81,17 @@ async def handle_message(event: GroupMessageEvent | PrivateMessageEvent) -> None
     await message_dispatcher.enqueue(context_id, is_group, state, event)
 
 
-register_commands(plugin_config, states)
-state_persistence = StatePersistence(
-    plugin_config,
-    states,
-    store.get_plugin_data_file("llmchat_state.json"),
-    store.get_plugin_data_file("llmchat_private_state.json"),
-)
+register_commands(plugin_config, states, state_persistence.save_state)
 
 
-@driver.on_startup
+@post_db_init
 async def init_plugin() -> None:
     logger.info("llmchat插件启动初始化")
     await state_persistence.load()
-    scheduler.add_job(
-        state_persistence.save,
-        "interval",
-        minutes=5,
-        id="llmchat_save_state",
-        replace_existing=True,
-    )
 
 
 @driver.on_shutdown
 async def cleanup_plugin() -> None:
     logger.info("llmchat插件关闭清理")
     await message_dispatcher.shutdown()
-    await state_persistence.save()
     await MCPClient.destroy_instance()

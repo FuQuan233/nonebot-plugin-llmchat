@@ -7,7 +7,7 @@ import tests.bootstrap  # noqa: F401
 from nonebot_plugin_llmchat.config import PresetConfig, ScopedConfig
 from nonebot_plugin_llmchat.context_manager import ContextManager
 from nonebot_plugin_llmchat.conversation import ConversationService
-from nonebot_plugin_llmchat.memory import ConversationTurn, restore_turns
+from nonebot_plugin_llmchat.memory import ConversationTurn, prune_old_turn_images, restore_turns
 from nonebot_plugin_llmchat.state import StateStore
 
 
@@ -101,6 +101,37 @@ class MemoryTests(unittest.IsolatedAsyncioTestCase):
         assert ContextManager.find_context_window({"context_length": 128000}) == 128000
         assert ContextManager.find_context_window({"top_provider": {"context_length": 64000}}) == 64000
         assert ContextManager.find_context_window({"id": "model"}) is None
+
+    def test_only_previous_turn_keeps_original_images(self):
+        turns = []
+        for number in range(1, 4):
+            turns.append(
+                ConversationTurn(
+                    [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": f"user-{number}"},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": f"data:image/jpeg;base64,image-{number}"},
+                                },
+                            ],
+                        },
+                        {"role": "assistant", "content": f"assistant-{number}"},
+                    ]
+                )
+            )
+
+        removed = prune_old_turn_images(turns, keep_recent_turns=1)
+
+        assert removed == 2
+        assert turns[0].messages[0]["content"][1] == {"type": "text", "text": "[历史消息包含图片]"}
+        assert turns[1].messages[0]["content"][1] == {"type": "text", "text": "[历史消息包含图片]"}
+        assert turns[2].messages[0]["content"][1]["image_url"]["url"].endswith("image-3")
+        assert turns[0].dirty
+        assert turns[1].dirty
+        assert not turns[2].dirty
 
     def test_build_messages_keeps_summary_before_complete_recent_turns(self):
         preset = PresetConfig(name="test", api_base="x", api_key="x", model_name="x")
