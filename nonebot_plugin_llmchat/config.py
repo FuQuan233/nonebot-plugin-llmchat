@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -17,6 +19,9 @@ class PresetConfig(BaseModel):
     user_agent: str = Field(default="", description="请求API时使用的自定义User-Agent")
     support_mcp: bool = Field(default=False, description="是否支持MCP")
     support_image: bool = Field(default=False, description="是否支持图片输入")
+    image_preview_max_edge: int = Field(default=1024, ge=256, description="发送给模型的图片预览最长边")
+    image_preview_quality: int = Field(default=82, ge=1, le=95, description="发送给模型的JPEG预览质量")
+    image_detail: Literal["auto", "low", "high"] = Field(default="low", description="视觉模型图片处理精度")
     stream: bool = Field(default=False, description="是否使用流式响应")
     extra_body: dict = Field(default_factory=dict, description="额外请求体字段")
     request_with_reasoning_content: bool = Field(

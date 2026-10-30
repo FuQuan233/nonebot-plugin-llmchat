@@ -203,6 +203,9 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 | user_agent | 否 | 无 | 请求API时使用的自定义User-Agent |
 | support_mcp | 否 | False | 是否支持MCP协议 |
 | support_image | 否 | False | 是否支持图片输入 |
+| image_preview_max_edge | 否 | 1024 | 发给模型的图片预览最长边，原图不会因此被修改 |
+| image_preview_quality | 否 | 82 | 图片预览的JPEG质量，范围为1到95 |
+| image_detail | 否 | low | 视觉模型图片精度，可选`low`、`auto`或`high` |
 | stream | 否 | False | 是否启用流式响应；普通行完成后立即发送，三反引号内容框闭合后整体发送 |
 | extra_body | 否 | {} | 额外的请求体字段，用于兼容不同API的特殊参数 |
 | request_with_reasoning_content | 否 | false | 请求中是否包含推理过程内容（部分模型要求进行了工具调用后，必须完整回传推理过程给API） |

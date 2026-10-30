@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
+from io import BytesIO
 import json
 import re
 import ssl
@@ -9,6 +10,7 @@ import ssl
 import httpx
 from nonebot import logger
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message, PrivateMessageEvent
+from PIL import Image, ImageOps
 
 from .output_protocol import parse_reply_segments
 
@@ -20,6 +22,8 @@ MessageSender = Callable[[Message], Awaitable[object]]
 class DownloadedImage:
     content: bytes
     mime_type: str
+    preview_content: bytes
+    preview_mime_type: str
 
 
 def detect_image_mime(content: bytes, content_type: str | None = None) -> str:
@@ -33,6 +37,19 @@ def detect_image_mime(content: bytes, content_type: str | None = None) -> str:
     if content.startswith(b"RIFF") and content[8:12] == b"WEBP":
         return "image/webp"
     return "image/jpeg"
+
+
+def create_image_preview(content: bytes, *, max_edge: int, quality: int) -> tuple[bytes, str]:
+    """生成供视觉模型使用的静态压缩预览，原图另行保留。"""
+    with Image.open(BytesIO(content)) as source:
+        source.seek(0)
+        image = ImageOps.exif_transpose(source).convert("RGBA")
+        image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+        background = Image.new("RGB", image.size, "white")
+        background.paste(image, mask=image.getchannel("A"))
+        output = BytesIO()
+        background.save(output, format="JPEG", quality=quality, optimize=True)
+        return output.getvalue(), "image/jpeg"
 
 
 def pop_reasoning_content(content: str | None) -> tuple[str | None, str | None]:
@@ -71,7 +88,12 @@ def format_message(event: ChatEvent, bot_name: str) -> str:
     )
 
 
-async def download_images(event: ChatEvent) -> list[DownloadedImage]:
+async def download_images(
+    event: ChatEvent,
+    *,
+    preview_max_edge: int = 1024,
+    preview_quality: int = 82,
+) -> list[DownloadedImage]:
     urls = [segment.data.get("url") or segment.data.get("file") for segment in event.get_message() if segment.type == "image"]
     urls = [url for url in urls if url]
     if not urls:
@@ -87,7 +109,25 @@ async def download_images(event: ChatEvent) -> list[DownloadedImage]:
                 response = await client.get(url)
                 response.raise_for_status()
                 mime_type = detect_image_mime(response.content, response.headers.get("content-type"))
-                images.append(DownloadedImage(content=response.content, mime_type=mime_type))
+                try:
+                    preview_content, preview_mime_type = await asyncio.to_thread(
+                        create_image_preview,
+                        response.content,
+                        max_edge=preview_max_edge,
+                        quality=preview_quality,
+                    )
+                    logger.debug(f"图片预览压缩完成：{len(response.content)} -> " f"{len(preview_content)} 字节")
+                except (OSError, ValueError):
+                    logger.exception(f"压缩图片失败，将使用原图: {url}")
+                    preview_content, preview_mime_type = response.content, mime_type
+                images.append(
+                    DownloadedImage(
+                        content=response.content,
+                        mime_type=mime_type,
+                        preview_content=preview_content,
+                        preview_mime_type=preview_mime_type,
+                    )
+                )
             except Exception:
                 logger.exception(f"下载图片失败: {url}")
     return images

@@ -120,7 +120,11 @@ class ConversationService:
         for pending_event in events:
             content.append({"type": "text", "text": format_message(pending_event, bot_name)})
             if preset.support_image:
-                for image in await download_images(pending_event):
+                for image in await download_images(
+                    pending_event,
+                    preview_max_edge=preset.image_preview_max_edge,
+                    preview_quality=preset.image_preview_quality,
+                ):
                     if support_stickers:
                         candidate_id = f"image_{pending_event.message_id}_{candidate_number}"
                         candidate_number += 1
@@ -139,11 +143,14 @@ class ConversationService:
                                 "text": f"[紧随其后的图片候选ID: {candidate_id}]",
                             }
                         )
-                    encoded = base64.b64encode(image.content).decode()
+                    encoded = base64.b64encode(image.preview_content).decode()
                     content.append(
                         {
                             "type": "image_url",
-                            "image_url": {"url": f"data:{image.mime_type};base64,{encoded}"},
+                            "image_url": {
+                                "url": f"data:{image.preview_mime_type};base64,{encoded}",
+                                "detail": preset.image_detail,
+                            },
                         }
                     )
         transcript: list[dict[str, Any]] = [{"role": "user", "content": content}]
