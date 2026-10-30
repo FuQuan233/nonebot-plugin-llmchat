@@ -138,6 +138,8 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 | LLMCHAT__MCP_SERVERS | 否 | {} | MCP服务器配置，具体见下表 |
 | LLMCHAT__ENABLE_PRIVATE_CHAT | 否 | False | 是否启用私聊功能 |
 | LLMCHAT__PRIVATE_CHAT_PRESET | 否 | off | 私聊默认使用的预设名称 |
+| LLMCHAT__STICKER_ENABLED | 否 | True | 是否允许视觉模型自动收藏和使用全局共享表情包 |
+| LLMCHAT__STICKER_MAX_FILE_SIZE | 否 | 5242880 | 单个表情包允许保存的最大字节数 |
 
 ### 上下文记忆与压缩
 
@@ -159,6 +161,15 @@ _✨ 支持多API预设、MCP协议、内置工具、联网搜索、视觉模型
 
 从旧版本升级时，插件会在数据库初始化后自动导入原有`llmchat_state.json`和`llmchat_private_state.json`。导入成功后，旧文件会
 改名为以`.migrated`结尾的备份，不会继续参与读写。
+
+### 表情包收藏与使用
+
+启用表情包功能且当前预设支持图片时，视觉模型会在正常聊天请求中识别当前轮次的图片。模型认为图片适合作为反应图、梗图或
+表情包时，可以调用`sticker__collect`收藏；所有群聊和私聊共享同一个表情包库，相同图片按SHA-256自动去重，不限制单轮收藏数量。
+
+模型可以调用`sticker__send`按情绪、关键词和使用语境匹配表情包。每次工具调用都会立即发送匹配的图片，并向模型明确返回
+“已发送”或“未找到”，不向聊天中发送工具调用提示，也不设置表情包专用的发送次数或冷却限制。图片原文件保存在插件数据目录，
+语义描述、来源和使用次数通过`nonebot-plugin-datastore`保存到数据库。
 
 ### 内置OneBot工具
 
@@ -314,6 +325,7 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 - `output_protocol.py`：按行回复、长文本/代码内容框保护与静默回复协议。
 - `streaming.py`：流式响应聚合、普通行即时发送、长文本/代码内容框整体发送和工具调用增量重组。
 - `message_utils.py` 与 `prompts.py`：消息转换、图片处理和提示词构建。
+- `stickers.py`：全局表情包收藏、去重、语义匹配和即时发送。
 - `mcpclient.py` 与 `onebottools.py`：外部 MCP 和 OneBot 工具适配。
 - `models.py`、`migrations/`与`persistence.py`：datastore数据库模型、迁移、实时持久化和旧JSON数据导入。
 - `commands.py`：管理命令注册。

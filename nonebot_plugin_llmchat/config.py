@@ -73,6 +73,8 @@ class ScopedConfig(BaseModel):
     ignore_prefixes: list[str] = Field(default_factory=list, description="忽略的消息前缀")
     enable_private_chat: bool = Field(default=False, description="是否启用私聊")
     private_chat_preset: str = Field(default="off", description="私聊默认预设")
+    sticker_enabled: bool = Field(default=True, description="是否允许视觉模型收藏和使用全局表情包")
+    sticker_max_file_size: int = Field(default=5 * 1024 * 1024, ge=1, description="单个表情包最大字节数")
 
     @model_validator(mode="after")
     def validate_presets(self):

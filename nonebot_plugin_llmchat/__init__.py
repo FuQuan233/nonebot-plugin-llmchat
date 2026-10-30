@@ -16,6 +16,7 @@ from .mcpclient import MCPClient
 from .models import plugin_data
 from .persistence import StatePersistence
 from .state import StateStore
+from .stickers import StickerService
 
 __plugin_meta__ = PluginMetadata(
     name="llmchat",
@@ -35,6 +36,10 @@ state_persistence = StatePersistence(
     states,
     plugin_data.data_dir / "llmchat_state.json",
     plugin_data.data_dir / "llmchat_private_state.json",
+)
+sticker_service = StickerService(
+    plugin_data.data_dir / "stickers",
+    plugin_config.sticker_max_file_size,
 )
 
 # 保留旧版公开名称，避免依赖插件内部状态的代码立即失效。
@@ -66,6 +71,7 @@ conversation = ConversationService(
     bot_names=set(driver.config.nickname),
     sender=handler.send,
     save_state=state_persistence.save_state,
+    sticker_service=sticker_service,
 )
 message_dispatcher = MessageDispatcher(conversation.process_event)
 

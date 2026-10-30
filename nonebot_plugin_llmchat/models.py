@@ -1,7 +1,7 @@
 from typing import Any
 
 from nonebot_plugin_datastore import get_plugin_data
-from sqlalchemy import JSON, BigInteger, Boolean, Float, ForeignKeyConstraint, String, Text
+from sqlalchemy import JSON, BigInteger, Boolean, Float, ForeignKeyConstraint, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 plugin_data = get_plugin_data("nonebot_plugin_llmchat")
@@ -46,3 +46,28 @@ class ConversationTurnRecord(Model):
     is_group: Mapped[bool] = mapped_column(Boolean, primary_key=True)
     sequence: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     messages: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+
+
+class StickerRecord(Model):
+    """所有会话共享的表情包及模型生成的语义索引。"""
+
+    __tablename__ = "nonebot_plugin_llmchat_sticker"
+    __table_args__ = (Index("ix_llmchat_sticker_enabled_emotion", "enabled", "emotion"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(64), unique=True)
+    file_name: Mapped[str] = mapped_column(String(128), unique=True)
+    mime_type: Mapped[str] = mapped_column(String(64))
+    file_size: Mapped[int] = mapped_column(BigInteger)
+    description: Mapped[str] = mapped_column(Text)
+    emotion: Mapped[str] = mapped_column(String(64))
+    keywords: Mapped[list[str]] = mapped_column(JSON)
+    recognized_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_context_id: Mapped[int] = mapped_column(BigInteger)
+    source_is_group: Mapped[bool] = mapped_column(Boolean)
+    source_message_id: Mapped[int] = mapped_column(BigInteger)
+    source_user_id: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[float] = mapped_column(Float)
+    last_used_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    use_count: Mapped[int] = mapped_column(BigInteger)
+    enabled: Mapped[bool] = mapped_column(Boolean)

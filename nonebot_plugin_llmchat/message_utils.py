@@ -1,6 +1,6 @@
 import asyncio
-import base64
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import datetime
 import json
 import re
@@ -14,6 +14,25 @@ from .output_protocol import parse_reply_segments
 
 ChatEvent = GroupMessageEvent | PrivateMessageEvent
 MessageSender = Callable[[Message], Awaitable[object]]
+
+
+@dataclass(frozen=True, slots=True)
+class DownloadedImage:
+    content: bytes
+    mime_type: str
+
+
+def detect_image_mime(content: bytes, content_type: str | None = None) -> str:
+    declared = (content_type or "").split(";", maxsplit=1)[0].strip().lower()
+    if declared.startswith("image/"):
+        return declared
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if content.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/jpeg"
 
 
 def pop_reasoning_content(content: str | None) -> tuple[str | None, str | None]:
@@ -52,7 +71,7 @@ def format_message(event: ChatEvent, bot_name: str) -> str:
     )
 
 
-async def download_images(event: ChatEvent) -> list[str]:
+async def download_images(event: ChatEvent) -> list[DownloadedImage]:
     urls = [segment.data.get("url") or segment.data.get("file") for segment in event.get_message() if segment.type == "image"]
     urls = [url for url in urls if url]
     if not urls:
@@ -61,13 +80,14 @@ async def download_images(event: ChatEvent) -> list[str]:
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
     ssl_context.set_ciphers("DEFAULT@SECLEVEL=2")
-    images: list[str] = []
+    images: list[DownloadedImage] = []
     async with httpx.AsyncClient(verify=ssl_context, timeout=10.0) as client:
         for url in urls:
             try:
                 response = await client.get(url)
                 response.raise_for_status()
-                images.append(base64.b64encode(response.content).decode())
+                mime_type = detect_image_mime(response.content, response.headers.get("content-type"))
+                images.append(DownloadedImage(content=response.content, mime_type=mime_type))
             except Exception:
                 logger.exception(f"下载图片失败: {url}")
     return images

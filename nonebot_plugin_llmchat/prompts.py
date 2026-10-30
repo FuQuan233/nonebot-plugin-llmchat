@@ -10,6 +10,7 @@ def build_system_prompt(
     bot_names: set[str],
     is_group: bool,
     support_tools: bool,
+    support_stickers: bool = False,
 ) -> str:
     chat_type = "群聊" if is_group else "私聊"
     names = "、".join(sorted(bot_names))
@@ -69,6 +70,19 @@ def build_system_prompt(
         )
         lines.extend(
             f"- {name}：{server.additional_prompt}" for name, server in config.mcp_servers.items() if server.additional_prompt
+        )
+    if support_stickers:
+        lines.extend(
+            [
+                "",
+                "[表情包]",
+                "你拥有所有对话共享的表情包库，应像活跃群友一样积极收藏和使用表情包。",
+                "每张当前图片前都有候选ID；发现适合反复使用的反应图、梗图或表情包时，主动调用sticker__collect收藏。",
+                "一次可以收藏任意多张好用的表情包，不要收藏普通照片、聊天截图、二维码或涉及隐私的图片。",
+                "当表情包能让回应更自然、有趣或传神时，主动调用sticker__send；可以根据表达需要连续发送。",
+                "sticker__send会立即尝试匹配并发送，并明确告诉你成功或未找到；未找到时再正常改用文字表达。",
+                "收藏和发送都是内部动作，不要向聊天对象解释工具、候选ID、匹配过程或表情包数据库。",
+            ]
         )
     lines.extend(
         [

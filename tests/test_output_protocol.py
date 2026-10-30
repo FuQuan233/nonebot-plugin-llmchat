@@ -61,3 +61,21 @@ class OutputProtocolTests(unittest.TestCase):
         assert "```text" in prompt
         assert "```python" in prompt
         assert NO_REPLY in prompt
+
+    def test_prompt_encourages_visual_model_to_collect_and_send_stickers(self):
+        preset = PresetConfig(name="test", api_base="x", api_key="x", model_name="x", support_image=True)
+        config = ScopedConfig(api_presets=[preset], default_preset="test")
+        prompt = build_system_prompt(
+            config=config,
+            state=StateStore(config).group_states[1],
+            bot_names={"bot"},
+            is_group=True,
+            support_tools=False,
+            support_stickers=True,
+        )
+
+        assert "所有对话共享" in prompt
+        assert "积极收藏和使用" in prompt
+        assert "一次可以收藏任意多张" in prompt
+        assert "可以根据表达需要连续发送" in prompt
+        assert "会立即尝试匹配并发送" in prompt

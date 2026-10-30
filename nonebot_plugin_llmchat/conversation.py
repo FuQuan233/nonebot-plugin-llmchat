@@ -25,6 +25,7 @@ from .message_utils import (
 )
 from .prompts import build_system_prompt
 from .state import ChatState, StateStore
+from .stickers import StickerCandidate, StickerService
 from .streaming import CompletionResult, StreamedMessageBuilder, StreamingReplyEmitter
 
 StateSaver = Callable[[int, bool, ChatState], Awaitable[None]]
@@ -38,12 +39,14 @@ class ConversationService:
         bot_names: set[str],
         sender: MessageSender,
         save_state: StateSaver | None = None,
+        sticker_service: StickerService | None = None,
     ) -> None:
         self.config = config
         self.states = states
         self.bot_names = bot_names
         self.sender = sender
         self._save_state = save_state
+        self.sticker_service = sticker_service
         self.context_manager = ContextManager(config)
 
     async def process_event(
@@ -96,6 +99,7 @@ class ConversationService:
         events: list[ChatEvent],
     ) -> None:
         preset = self.states.get_preset(state)
+        support_stickers = preset.support_image and self.config.sticker_enabled and self.sticker_service is not None
         mcp_client = MCPClient.get_instance(
             self.config.mcp_servers,
             self.config.mcp_server_cwd,
@@ -107,18 +111,50 @@ class ConversationService:
             bot_names=self.bot_names,
             is_group=is_group,
             support_tools=preset.support_mcp,
+            support_stickers=support_stickers,
         )
         content: list[dict[str, Any]] = []
+        image_candidates: dict[str, StickerCandidate] = {}
+        candidate_number = 0
         bot_name = next(iter(sorted(self.bot_names)), "机器人")
         for pending_event in events:
             content.append({"type": "text", "text": format_message(pending_event, bot_name)})
             if preset.support_image:
                 for image in await download_images(pending_event):
-                    content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image}"}})
+                    if support_stickers:
+                        candidate_id = f"image_{pending_event.message_id}_{candidate_number}"
+                        candidate_number += 1
+                        image_candidates[candidate_id] = StickerCandidate(
+                            id=candidate_id,
+                            content=image.content,
+                            mime_type=image.mime_type,
+                            context_id=context_id,
+                            is_group=is_group,
+                            message_id=pending_event.message_id,
+                            user_id=pending_event.user_id,
+                        )
+                        content.append(
+                            {
+                                "type": "text",
+                                "text": f"[紧随其后的图片候选ID: {candidate_id}]",
+                            }
+                        )
+                    encoded = base64.b64encode(image.content).decode()
+                    content.append(
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{image.mime_type};base64,{encoded}"},
+                        }
+                    )
         transcript: list[dict[str, Any]] = [{"role": "user", "content": content}]
         request_config = self._build_request_config(preset)
+        tools: list[dict[str, Any]] = []
         if preset.support_mcp:
-            request_config["tools"] = await mcp_client.get_available_tools(is_group)
+            tools.extend(await mcp_client.get_available_tools(is_group))
+        if support_stickers and self.sticker_service is not None:
+            tools.extend(self.sticker_service.get_tools())
+        if tools:
+            request_config["tools"] = tools
 
         removed_images = prune_old_turn_images(state.turns, keep_recent_turns=1)
         if removed_images:
@@ -138,6 +174,7 @@ class ConversationService:
                     transcript=transcript,
                     event=event,
                     is_group=is_group,
+                    image_candidates=image_candidates,
                 )
             except Exception as error:
                 if not self.context_manager.is_context_overflow(error) or any(item.get("role") == "tool" for item in transcript):
@@ -162,6 +199,7 @@ class ConversationService:
                     transcript=transcript,
                     event=event,
                     is_group=is_group,
+                    image_candidates=image_candidates,
                 )
 
             message = completion.message
@@ -250,10 +288,11 @@ class ConversationService:
         transcript: list[dict[str, Any]],
         event: ChatEvent,
         is_group: bool,
+        image_candidates: dict[str, StickerCandidate] | None = None,
     ) -> CompletionResult:
         completion = await self._complete(client, request_config, messages + transcript, stream=preset.stream)
         message = completion.message
-        if not preset.support_mcp:
+        if not request_config.get("tools"):
             return completion
 
         call_counts: Counter[str] = Counter()
@@ -282,6 +321,7 @@ class ConversationService:
                     call_counts,
                     event,
                     is_group,
+                    image_candidates or {},
                 )
             completion = await self._complete(client, request_config, messages + transcript, stream=preset.stream)
             message = completion.message
@@ -308,6 +348,7 @@ class ConversationService:
         call_counts: Counter[str],
         event: ChatEvent,
         is_group: bool,
+        image_candidates: dict[str, StickerCandidate],
     ) -> None:
         name = tool_call.function.name
         raw_arguments = tool_call.function.arguments
@@ -318,6 +359,10 @@ class ConversationService:
         except (json.JSONDecodeError, TypeError, ValueError) as error:
             result = f"工具参数格式错误: {error!s}"
         else:
+            if self.sticker_service is not None and self.sticker_service.is_sticker_tool(name):
+                result = await self.sticker_service.call_tool(name, arguments, image_candidates, self.sender)
+                transcript.append({"role": "tool", "tool_call_id": tool_call.id, "content": str(result)})
+                return
             signature = f"{name}:{json.dumps(arguments, sort_keys=True, ensure_ascii=False)}"
             call_counts[signature] += 1
             if call_counts[signature] > self.config.max_repeated_tool_calls:
