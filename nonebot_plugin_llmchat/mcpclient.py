@@ -2,13 +2,14 @@ import asyncio
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from time import monotonic
-from typing import Any, cast
+from typing import cast
 
-import httpx
-from mcp import ClientSession, StdioServerParameters
+import httpx2
+from mcp import Client, ClientSession, StdioServerParameters
 from mcp.client.sse import sse_client
-from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamable_http_client
+from mcp.shared.exceptions import MCPError
+from mcp.types import REQUEST_TIMEOUT
 from nonebot import logger
 
 from .config import MCPServerConfig
@@ -33,7 +34,7 @@ class MCPClient:
         cls,
         server_config: dict[str, MCPServerConfig] | None = None,
         default_command_cwd: str | None = None,
-        operation_timeout: int = 30,
+        operation_timeout: float = 30,
     ):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -43,7 +44,7 @@ class MCPClient:
         self,
         server_config: dict[str, MCPServerConfig] | None = None,
         default_command_cwd: str | None = None,
-        operation_timeout: int = 100,
+        operation_timeout: float = 100,
     ):
         if self._initialized:
             return
@@ -74,7 +75,7 @@ class MCPClient:
         cls,
         server_config: dict[str, MCPServerConfig] | None = None,
         default_command_cwd: str | None = None,
-        operation_timeout: int = 30,
+        operation_timeout: float = 30,
     ):
         """获取MCPClient实例"""
         if cls._instance is None:
@@ -132,55 +133,56 @@ class MCPClient:
         server_name: str,
         session_stack: AsyncExitStack,
     ) -> tuple[ClientSession, AsyncExitStack]:
-        """创建并初始化一个新的服务器会话。"""
+        """创建会话，由 SDK 协商协议版本并兼容旧版 initialize 握手。"""
         config = self.server_config[server_name]
         if config.url:
-            transport_type = config.transport
-            if transport_type == "streamable_http":
-                logger.debug(f"服务器[{server_name}]使用 streamable_http 传输协议")
-                http_client = await session_stack.enter_async_context(httpx.AsyncClient(headers=config.headers or {}))
-                read, write, _ = await session_stack.enter_async_context(
-                    streamable_http_client(url=config.url, http_client=http_client)
-                )
-                transport = (read, write)
-            elif transport_type == "sse":
-                logger.debug(f"服务器[{server_name}]使用 sse 传输协议")
-                transport = await session_stack.enter_async_context(sse_client(url=config.url, headers=config.headers))
+            if config.transport:
+                session = await self._connect_http_session(config, config.transport, session_stack)
             else:
-                # 未指定协议，自动探测：先尝试 sse，失败则回退到 streamable_http
-                # （sse 服务器对 streamable_http 的 POST 请求会卡住，反之 sse 连 streamable_http 服务器会快速返回 405）
-                logger.debug(f"服务器[{server_name}]未指定传输协议，开始自动探测")
-                probe_stack = AsyncExitStack()
                 try:
-                    read, write = await probe_stack.enter_async_context(sse_client(url=config.url, headers=config.headers))
-                    await session_stack.enter_async_context(probe_stack)
-                    transport = (read, write)
-                    logger.debug(f"服务器[{server_name}]自动探测成功: 使用 sse 传输协议")
-                except Exception as e:
-                    await probe_stack.aclose()
-                    logger.debug(f"服务器[{server_name}]sse 探测失败({e})，回退到 streamable_http")
-                    http_client = await session_stack.enter_async_context(httpx.AsyncClient(headers=config.headers or {}))
-                    read, write, _ = await session_stack.enter_async_context(
-                        streamable_http_client(url=config.url, http_client=http_client)
-                    )
-                    transport = (read, write)
-                    logger.debug(f"服务器[{server_name}]自动探测成功: 使用 streamable_http 传输协议")
+                    session = await self._connect_http_session(config, "streamable_http", session_stack)
+                except Exception as error:
+                    logger.debug(f"服务器[{server_name}]Streamable HTTP 探测失败({error})，回退到 SSE")
+                    session = await self._connect_http_session(config, "sse", session_stack)
         elif config.command:
-            stdio_params: dict[str, Any] = {
-                "command": config.command,
-                "args": config.args or [],
-                "env": config.env or {},
-            }
-            if self.default_command_cwd:
-                stdio_params["cwd"] = self.default_command_cwd
-            transport = await session_stack.enter_async_context(cast(Any, stdio_client(StdioServerParameters(**stdio_params))))
+            params = StdioServerParameters(
+                command=config.command,
+                args=config.args or [],
+                env=config.env or {},
+                cwd=self.default_command_cwd,
+            )
+            client = await session_stack.enter_async_context(Client(params, read_timeout_seconds=self.operation_timeout))
+            session = client.session
         else:
             raise ValueError("Server config must have either url or command")
-
-        read, write = transport
-        session = await session_stack.enter_async_context(ClientSession(read, write))
-        await session.initialize()
         return session, session_stack
+
+    async def _connect_http_session(
+        self,
+        config: MCPServerConfig,
+        transport_type: str,
+        session_stack: AsyncExitStack,
+    ) -> ClientSession:
+        """探测失败时先释放全部资源，成功后交给会话所有者统一关闭。"""
+        async with AsyncExitStack() as attempt_stack:
+            if transport_type == "streamable_http":
+                http_client = await attempt_stack.enter_async_context(
+                    httpx2.AsyncClient(
+                        headers=config.headers or {},
+                        timeout=httpx2.Timeout(self.operation_timeout, read=max(300, self.operation_timeout)),
+                    )
+                )
+                transport = streamable_http_client(url=cast(str, config.url), http_client=http_client)
+            else:
+                transport = sse_client(
+                    url=cast(str, config.url),
+                    headers=config.headers,
+                    timeout=self.operation_timeout,
+                    sse_read_timeout=max(300, self.operation_timeout),
+                )
+            client = await attempt_stack.enter_async_context(Client(transport, read_timeout_seconds=self.operation_timeout))
+            session_stack.push_async_exit(attempt_stack.pop_all())
+            return client.session
 
     async def _create_server_session(self, server_name: str) -> tuple[ClientSession, _SessionHandle]:
         loop = asyncio.get_running_loop()
@@ -211,7 +213,10 @@ class MCPClient:
         if handle is not None:
             handle.stop_event.set()
             try:
-                await asyncio.wait_for(handle.owner_task, timeout=self.operation_timeout + 1)
+                await asyncio.wait_for(
+                    asyncio.gather(handle.owner_task, return_exceptions=True),
+                    timeout=self.operation_timeout + 1,
+                )
             except TimeoutError:
                 logger.error(f"等待MCP会话[{server_name}]关闭超时")
 
@@ -221,6 +226,11 @@ class MCPClient:
         async with self._session_lock:
             last_used = self._session_last_used.get(server_name)
             session = self.sessions.get(server_name)
+            handle = self._session_handles.get(server_name)
+
+            if session is not None and handle is not None and handle.owner_task.done():
+                await self._close_server_session(server_name)
+                session = None
 
             # 空闲超过阈值则销毁重建
             if session is not None and last_used is not None:
@@ -283,7 +293,7 @@ class MCPClient:
                         "function": {
                             "name": f"mcp__{server_name}__{tool.name}",
                             "description": tool.description,
-                            "parameters": tool.inputSchema,
+                            "parameters": tool.input_schema,
                         },
                     }
                     for tool in tools
@@ -342,7 +352,13 @@ class MCPClient:
             except asyncio.TimeoutError:
                 logger.error(f"调用工具[{real_tool_name}]超时")
                 return f"调用工具[{real_tool_name}]超时"
-            except (RuntimeError, ValueError, TypeError, OSError, ConnectionError) as e:
+            except MCPError as error:
+                # v2 将 HTTP 错误映射为单次请求的协议错误，会话仍可继续使用。
+                if error.code == REQUEST_TIMEOUT:
+                    return f"调用工具[{real_tool_name}]超时"
+                logger.warning(f"调用工具[{real_tool_name}]失败: {error}")
+                return f"调用工具[{real_tool_name}]失败: {error}"
+            except Exception as e:
                 logger.opt(exception=e).error(f"调用工具[{real_tool_name}]失败，准备重置会话")
                 async with self._session_lock:
                     await self._close_server_session(server_name)

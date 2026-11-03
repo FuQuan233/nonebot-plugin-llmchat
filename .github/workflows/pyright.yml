@@ -9,7 +9,8 @@ on:
       - "nonebot_plugin_llmchat/**"
       - ".github/workflows/pyright.yml"
       - "pyproject.toml"
-      - "poetry.lock"
+      - "uv.lock"
+      - ".github/actions/setup-python/**"
 
 jobs:
   pyright:
@@ -25,9 +26,5 @@ jobs:
       - name: Setup Python environment
         uses: ./.github/actions/setup-python
 
-      - run: echo "$(poetry env info --path)/bin" >> $GITHUB_PATH
-
       - name: Run Pyright
-        uses: jakebailey/pyright-action@v2
-        with:
-          pylance-version: latest-release
+        run: uv run --locked pyright
