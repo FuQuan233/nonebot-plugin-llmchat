@@ -18,11 +18,11 @@ jobs:
     name: Ruff Lint
     runs-on: ubuntu-latest
     concurrency:
-      group: lint-${{ github.ref }}
+      group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Python environment
         uses: ./.github/actions/setup-python
