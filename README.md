@@ -219,7 +219,16 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 | env | 否 | {} | stdio服务器环境变量 |
 | url | 远程服务器必填 | 无 | 远程MCP服务器地址 |
 | headers | 否 | {} | 远程服务器http请求头，用于认证或其他设置 |
-| transport | 否 | 自动 | 远程MCP传输协议类型，可选 `sse` 或 `streamable_http` ，不填则自动探测 |
+| transport | 否 | 自动 | 远程MCP传输协议类型，可选 `sse` 或 `streamable_http`；不填时先尝试 Streamable HTTP，握手失败后回退 SSE |
+
+插件使用 MCP Python SDK v2，自动协商新协议，并在旧服务器不支持 `server/discover` 时回退到 `initialize` 握手。
+现有 `command`、`args`、`env`、`url`、`headers` 和 `transport` 配置保持兼容；stdio、SSE 与 Streamable HTTP 均受支持。
+HTTP 请求会保留自定义请求头和 URL 查询参数，支持 JSON 响应、SSE 响应以及有状态/无状态服务器。
+
+Tavily 等 HTTP 服务建议显式设置 `"transport": "streamable_http"`，地址使用 `https://mcp.tavily.com/mcp/`。
+可以继续使用示例中的 `?tavilyApiKey=...`，也可以通过 `headers` 配置 `Authorization: Bearer tvly-YOUR_API_KEY`。
+按照 [Tavily 官方免密接入说明](https://docs.tavily.com/documentation/keyless)，试用时还可改用
+`"headers": {"X-Tavily-Access-Mode": "keyless"}`，免密额度由服务端限制。插件不提供交互式 OAuth 登录。
 
 以下为在 Claude.app 的MCP服务器配置基础上增加的字段
 | 配置项 | 必填 | 默认值 | 说明 |
@@ -333,9 +342,26 @@ LLMCHAT__MCP_SERVERS同样为一个dict，key为服务器名称，value配置的
 - `models.py`、`migrations/`与`persistence.py`：datastore数据库模型、迁移、实时持久化和旧JSON数据导入。
 - `commands.py`：管理命令注册。
 
-运行回归测试：
+## 🛠️ 本地开发与验证
 
-    python -m unittest discover -s tests -v
+使用 Python 3.10+ 和 uv，在仓库根目录执行；uv 会创建或复用项目内的 `.venv`，后续命令均使用该虚拟环境：
+
+```sh
+uv sync --locked
+uv run --locked pre-commit install
+uv run --locked ruff check .
+uv run --locked ruff format --check .
+uv run --locked pyright
+uv run --locked python -m unittest discover -s tests -v
+uv build
+```
+
+依赖统一在 `pyproject.toml` 中声明，以 `uv.lock` 锁定；调整依赖后执行 `uv lock` 和 `uv sync`，不再维护 `poetry.lock`。
+MCP 依赖范围为 `>=2.3.0,<3.0.0`。MCP HTTP 连接使用 `httpx2`，工具输入字段使用 v2 的 `input_schema`。
+传输和会话仍由同一任务负责创建与关闭；单次 HTTP/协议错误会返回工具失败信息，后续请求可继续复用健康会话。
+
+回归测试使用本地真实 MCP SDK 服务器覆盖 stdio、SSE、Streamable HTTP、旧版握手、请求头/查询参数以及连接回收，
+不访问外部 API。CI 在 Linux/Windows 的 Python 3.10/3.13 环境运行这些测试。
 
 ## 🎉 使用
 

@@ -7,27 +7,25 @@ on:
   pull_request:
     paths:
       - "nonebot_plugin_llmchat/**"
+      - "tests/**"
       - ".github/workflows/pyright.yml"
       - "pyproject.toml"
-      - "poetry.lock"
+      - "uv.lock"
+      - ".github/actions/setup-python/**"
 
 jobs:
   pyright:
     name: Pyright Lint
     runs-on: ubuntu-latest
     concurrency:
-      group: lint-${{ github.ref }}-${{ matrix.env }}
+      group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Python environment
         uses: ./.github/actions/setup-python
 
-      - run: echo "$(poetry env info --path)/bin" >> $GITHUB_PATH
-
       - name: Run Pyright
-        uses: jakebailey/pyright-action@v2
-        with:
-          pylance-version: latest-release
+        run: uv run --locked pyright

@@ -11,25 +11,14 @@ jobs:
     name: Upload release to PyPI
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
-    - name: Set up Python
-      uses: actions/setup-python@v1
+    - uses: actions/checkout@v6
+    - name: Set up uv and Python
+      uses: astral-sh/setup-uv@v10.3.3
       with:
-        python-version: "3.x"
-    - name: Install pypa/build
-      run: >-
-        python -m
-        pip install
-        build
-        --user
+        version: "0.11.25"
+        python-version: "3.10"
     - name: Build a binary wheel and a source tarball
-      run: >-
-        python -m
-        build
-        --sdist
-        --wheel
-        --outdir dist/
-        .
+      run: uv build
     - name: Publish distribution to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:

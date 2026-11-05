@@ -9,18 +9,26 @@ on:
       - "nonebot_plugin_llmchat/**"
       - ".github/workflows/ruff.yml"
       - "pyproject.toml"
-      - "poetry.lock"
+      - "uv.lock"
+      - "tests/**"
+      - ".github/actions/setup-python/**"
 
 jobs:
   ruff:
     name: Ruff Lint
     runs-on: ubuntu-latest
     concurrency:
-      group: lint-${{ github.ref }}
+      group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
 
       - name: Run Ruff Lint
-        uses: astral-sh/ruff-action@v3
+        run: uv run --locked ruff check .
+
+      - name: Check formatting
+        run: uv run --locked ruff format --check .
